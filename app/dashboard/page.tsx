@@ -18,6 +18,8 @@ export default function DashboardPage() {
 
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [status, setStatus] = useState("Pending");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -83,6 +85,7 @@ export default function DashboardPage() {
         setAccountNumber(profile.account_number || "");
         setIfscCode(profile.ifsc_code || "");
         setJoiningDate(profile.joining_date || "");
+        setStatus(profile.status || "Pending");
       }
 
       await loadDocuments(uid);
@@ -196,9 +199,29 @@ export default function DashboardPage() {
     window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
+  const getStatusStyle = (currentStatus: string) => {
+    if (currentStatus === "Approved") {
+      return "bg-green-100 text-green-900 ring-green-200";
+    }
+    if (currentStatus === "Rejected") {
+      return "bg-red-100 text-red-900 ring-red-200";
+    }
+    if (currentStatus === "Under Review") {
+      return "bg-amber-100 text-amber-900 ring-amber-200";
+    }
+    return "bg-yellow-100 text-yellow-900 ring-yellow-200";
+  };
+
+  const getDocumentLabel = (docType: string) => {
+    if (docType === "pan_copy") return "PAN Copy";
+    if (docType === "aadhaar_copy") return "Aadhaar Copy";
+    if (docType === "photo") return "Photo";
+    return docType;
+  };
+
   if (loading) {
     return (
-      <div className="rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-200">
+      <div className="rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-300">
         <p className="text-slate-800">Loading...</p>
       </div>
     );
@@ -215,8 +238,16 @@ export default function DashboardPage() {
             Fill in your details and upload your onboarding documents.
           </p>
 
-          <p className="mt-2 text-sm font-semibold text-red-700">
+          <p className="mt-2 text-sm font-semibold text-slate-600">
             Logged in as: {userEmail}
+          </p>
+
+          <p
+            className={`mt-3 inline-block rounded-full px-4 py-1.5 text-sm font-bold ring-1 ${getStatusStyle(
+              status
+            )}`}
+          >
+            Current Status: {status || "Pending"}
           </p>
         </div>
 
@@ -434,8 +465,8 @@ export default function DashboardPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-300 px-4 py-3"
               >
                 <div>
-                  <p className="font-bold capitalize text-slate-950">
-                    {doc.document_type.replace("_", " ")}
+                  <p className="font-bold text-slate-950">
+                    {getDocumentLabel(doc.document_type)}
                   </p>
                   <p className="text-sm font-medium text-slate-700">
                     {doc.file_name}

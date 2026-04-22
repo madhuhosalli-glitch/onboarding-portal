@@ -28,9 +28,6 @@ export default function Home() {
             Login
           </Link>
 
-          <button className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-            Learn More
-          </button>
         </div>
       </section>
 

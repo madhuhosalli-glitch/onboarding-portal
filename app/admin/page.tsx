@@ -36,6 +36,7 @@ export default function AdminPage() {
 
   const [employees, setEmployees] = useState<EmployeeWithDocs[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     const init = async () => {
@@ -46,7 +47,7 @@ export default function AdminPage() {
         return;
       }
 
-      if (data.user.email !== ADMIN_EMAIL) {
+      if ((data.user.email || "").toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         router.push("/dashboard");
         return;
       }
@@ -72,25 +73,37 @@ export default function AdminPage() {
   }, [router]);
 
   const updateStatus = async (userId: string, status: string) => {
-    await supabase
+    setMessage("");
+
+    const { error } = await supabase
       .from("employee_profiles")
       .update({ status })
       .eq("user_id", userId);
 
+    if (error) {
+      setMessage("Error updating status: " + error.message);
+      return;
+    }
+
     setEmployees((prev) =>
       prev.map((e) => (e.user_id === userId ? { ...e, status } : e))
     );
+
+    setMessage(`Status updated to ${status}.`);
   };
 
   const handleViewDocument = async (filePath: string) => {
-    const { data } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from("employee-documents")
       .download(filePath);
 
-    if (data) {
-      const url = URL.createObjectURL(data);
-      window.open(url, "_blank", "noopener,noreferrer");
+    if (error || !data) {
+      setMessage("Unable to open file.");
+      return;
     }
+
+    const url = URL.createObjectURL(data);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const total = employees.length;
@@ -134,6 +147,12 @@ export default function AdminPage() {
         <p className="mt-2 text-base font-medium text-slate-700">
           Review employee onboarding data and uploaded documents
         </p>
+
+        {message && (
+          <p className="mt-4 rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 ring-1 ring-blue-200">
+            {message}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">

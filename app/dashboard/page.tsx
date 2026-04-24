@@ -260,7 +260,12 @@ export default function DashboardPage() {
               Admin Panel
             </button>
           )}
-
+          <button
+ 	    onClick={() => router.push("/training")}
+            className="rounded-xl bg-indigo-700 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-800"
+            >
+              Training Modules
+            </button>
           <button
             onClick={handleLogout}
             className="rounded-xl bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-800"

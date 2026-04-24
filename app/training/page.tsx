@@ -9,9 +9,10 @@ type TrainingModule = {
   title: string;
   description: string;
   progress?: {
-    status: string;
-    marks: number;
-  } | null;
+  status: string;
+  marks: number;
+  quiz_attempted: boolean;
+} | null;
 };
 
 export default function TrainingPage() {

@@ -25,8 +25,23 @@ type EmployeeDocument = {
   file_path: string;
 };
 
+type TrainingProgress = {
+  id: string;
+  user_id: string;
+  module_id: string;
+  marks: number;
+  status: string;
+  quiz_attempted: boolean;
+};
+
+type TrainingModule = {
+  id: string;
+  title: string;
+};
+
 type EmployeeWithDocs = EmployeeProfile & {
   documents: EmployeeDocument[];
+  training: (TrainingProgress & { module_title?: string })[];
 };
 
 const ADMIN_EMAIL = "ca.madhuhegde@gmail.com";
@@ -60,10 +75,31 @@ export default function AdminPage() {
         .from("employee_documents")
         .select("*");
 
-      const merged = (profiles || []).map((p) => ({
-        ...p,
-        documents: (docs || []).filter((d) => d.user_id === p.user_id),
-      }));
+      const { data: progress } = await supabase
+        .from("training_progress")
+        .select("*");
+
+      const { data: modules } = await supabase
+        .from("training_modules")
+        .select("id, title");
+
+      const merged = (profiles || []).map((profile) => {
+        const employeeTraining = (progress || [])
+          .filter((p) => p.user_id === profile.user_id)
+          .map((p) => {
+            const module = (modules || []).find((m) => m.id === p.module_id);
+            return {
+              ...p,
+              module_title: module?.title || "Unknown Module",
+            };
+          });
+
+        return {
+          ...profile,
+          documents: (docs || []).filter((d) => d.user_id === profile.user_id),
+          training: employeeTraining,
+        };
+      });
 
       setEmployees(merged);
       setLoading(false);
@@ -73,8 +109,6 @@ export default function AdminPage() {
   }, [router]);
 
   const updateStatus = async (userId: string, status: string) => {
-    setMessage("");
-
     const { error } = await supabase
       .from("employee_profiles")
       .update({ status })
@@ -113,15 +147,15 @@ export default function AdminPage() {
   const review = employees.filter((e) => e.status === "Under Review").length;
 
   const getStatusBadge = (status?: string) => {
-    if (status === "Approved") {
-      return "bg-green-100 text-green-900 border border-green-300";
-    }
-    if (status === "Rejected") {
-      return "bg-red-100 text-red-900 border border-red-300";
-    }
-    if (status === "Under Review") {
-      return "bg-amber-100 text-amber-900 border border-amber-300";
-    }
+    if (status === "Approved") return "bg-green-100 text-green-900 border border-green-300";
+    if (status === "Rejected") return "bg-red-100 text-red-900 border border-red-300";
+    if (status === "Under Review") return "bg-amber-100 text-amber-900 border border-amber-300";
+    return "bg-yellow-100 text-yellow-900 border border-yellow-300";
+  };
+
+  const getTrainingBadge = (status?: string) => {
+    if (status === "Passed") return "bg-green-100 text-green-900 border border-green-300";
+    if (status === "Failed") return "bg-red-100 text-red-900 border border-red-300";
     return "bg-yellow-100 text-yellow-900 border border-yellow-300";
   };
 
@@ -145,7 +179,7 @@ export default function AdminPage() {
       <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
         <h1 className="text-3xl font-bold text-slate-950">Admin Dashboard</h1>
         <p className="mt-2 text-base font-medium text-slate-700">
-          Review employee onboarding data and uploaded documents
+          Review employee onboarding, documents and training results.
         </p>
 
         {message && (
@@ -246,6 +280,48 @@ export default function AdminPage() {
                     >
                       Open File
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <h3 className="mb-3 text-xl font-bold text-slate-950">
+              Training Results
+            </h3>
+
+            {emp.training.length === 0 ? (
+              <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-300">
+                <p className="font-medium text-slate-700">
+                  No training attempted yet.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {emp.training.map((tr) => (
+                  <div
+                    key={tr.id}
+                    className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-300"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-base font-bold text-slate-950">
+                          {tr.module_title}
+                        </p>
+                        <p className="text-sm font-medium text-slate-700">
+                          Marks: {tr.marks}%
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-block rounded-full px-4 py-1.5 text-sm font-bold ${getTrainingBadge(
+                          tr.status
+                        )}`}
+                      >
+                        {tr.status || "Not Started"}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

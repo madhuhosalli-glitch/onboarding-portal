@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Article / Employee Training Portal",
-  description: "Training system",
+  description: "Training and learning system",
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-slate-50 text-slate-900">
-        <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
             <div className="flex items-center gap-4">
               <div className="h-11 w-1 rounded-full bg-blue-700" />
@@ -45,7 +45,7 @@ export default function RootLayout({
             <div className="rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-slate-200">
               <img
                 src="/logo.png"
-                alt="Company Logo"
+                alt="B V C & Co. Logo"
                 className="h-24 object-contain"
               />
             </div>

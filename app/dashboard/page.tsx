@@ -4,183 +4,242 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const ADMIN_EMAIL = "ca.madhuhegde@gmail.com";
-
-type ProfileForm = {
-  full_name: string;
-  sro_number: string;
-  foundation_marks: string;
-  ipcc_group1_marks: string;
-  ipcc_group2_marks: string;
-  personal_email: string;
-  mobile_number: string;
-};
-
 export default function DashboardPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [form, setForm] = useState<ProfileForm>({
-    full_name: "",
-    sro_number: "",
-    foundation_marks: "",
-    ipcc_group1_marks: "",
-    ipcc_group2_marks: "",
-    personal_email: "",
-    mobile_number: "",
-  });
 
-  const isAdmin = userEmail.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
+  const [profile, setProfile] = useState<any>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [progress, setProgress] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
+    const loadDashboard = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+
+      if (!userData.user) {
         router.push("/login");
         return;
       }
 
-      const uid = data.user.id;
-      setUserId(uid);
-      setUserEmail(data.user.email || "");
+      const userId = userData.user.id;
 
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from("employee_profiles")
-        .select("full_name,sro_number,foundation_marks,ipcc_group1_marks,ipcc_group2_marks,personal_email,mobile_number")
-        .eq("user_id", uid)
-        .maybeSingle();
+        .select("*")
+        .eq("user_id", userId)
+        .single();
 
-      if (profile?.full_name && profile?.sro_number) {
-        router.replace("/training");
-        return;
-      }
+      setProfile(profileData);
 
-      if (profile) {
-        setForm({
-          full_name: profile.full_name || "",
-          sro_number: profile.sro_number || "",
-          foundation_marks: profile.foundation_marks?.toString() || "",
-          ipcc_group1_marks: profile.ipcc_group1_marks?.toString() || "",
-          ipcc_group2_marks: profile.ipcc_group2_marks?.toString() || "",
-          personal_email: profile.personal_email || "",
-          mobile_number: profile.mobile_number || "",
-        });
-      }
+      const { data: modulesData } = await supabase
+        .from("training_modules")
+        .select("*")
+        .order("display_order", { ascending: true });
+
+      setModules(modulesData || []);
+
+      const { data: progressData } = await supabase
+        .from("training_progress")
+        .select("*")
+        .eq("user_id", userId);
+
+      setProgress(progressData || []);
 
       setLoading(false);
     };
 
-    checkUser();
+    loadDashboard();
   }, [router]);
 
-  const updateField = (key: keyof ProfileForm, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    setMessage("");
-
-    const { error } = await supabase.from("employee_profiles").upsert(
-      {
-        user_id: userId,
-        full_name: form.full_name.trim(),
-        sro_number: form.sro_number.trim(),
-        foundation_marks: form.foundation_marks ? Number(form.foundation_marks) : null,
-        ipcc_group1_marks: form.ipcc_group1_marks ? Number(form.ipcc_group1_marks) : null,
-        ipcc_group2_marks: form.ipcc_group2_marks ? Number(form.ipcc_group2_marks) : null,
-        personal_email: form.personal_email.trim(),
-        mobile_number: form.mobile_number.trim(),
-        status: "Training",
-      },
-      { onConflict: "user_id" }
-    );
-
-    if (error) {
-      setMessage("Error saving profile: " + error.message);
-      setSaving(false);
-      return;
-    }
-
-    router.push("/training");
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+  const getProgress = (moduleId: string) => {
+    return progress.find((p) => p.module_id === moduleId);
   };
 
   if (loading) {
     return (
-      <div className="rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-300">
-        <p className="text-slate-800">Loading...</p>
+      <div className="p-10 text-xl font-bold text-slate-900">
+        Loading Dashboard...
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-950">First Time Profile Setup</h1>
-          <p className="mt-2 text-slate-700">
-            Please fill these basic training details once. After saving, you will be taken directly to the Training Modules page.
-          </p>
-          <p className="mt-2 text-sm font-semibold text-slate-600">Logged in as: {userEmail}</p>
-        </div>
+    <div className="min-h-screen bg-slate-100 p-6">
 
-        <div className="flex flex-wrap gap-3">
-          {isAdmin && (
-            <button onClick={() => router.push("/admin")} className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800">
-              Admin Panel
-            </button>
-          )}
-          <button onClick={handleLogout} className="rounded-xl bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-800">
-            Logout
-          </button>
-        </div>
-      </div>
+      <div className="mx-auto max-w-7xl space-y-6">
 
-      <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-        <h2 className="mb-6 text-2xl font-bold text-slate-950">Article / Employee Training Profile</h2>
+        {/* HEADER */}
 
-        <form onSubmit={handleSave} className="grid gap-5 md:grid-cols-2">
-          <Input label="Full Name" value={form.full_name} onChange={(v) => updateField("full_name", v)} placeholder="Enter full name" required />
-          <Input label="SRO Number" value={form.sro_number} onChange={(v) => updateField("sro_number", v.toUpperCase())} placeholder="Enter SRO number" required />
-          <Input label="Foundation Marks" value={form.foundation_marks} onChange={(v) => updateField("foundation_marks", v)} placeholder="Enter marks" type="number" />
-          <Input label="IPCC / Inter Group 1 Marks" value={form.ipcc_group1_marks} onChange={(v) => updateField("ipcc_group1_marks", v)} placeholder="Enter Group 1 marks" type="number" />
-          <Input label="IPCC / Inter Group 2 Marks" value={form.ipcc_group2_marks} onChange={(v) => updateField("ipcc_group2_marks", v)} placeholder="Enter Group 2 marks" type="number" />
-          <Input label="Personal Email ID" value={form.personal_email} onChange={(v) => updateField("personal_email", v)} placeholder="personal@email.com" type="email" required />
-          <Input label="Mobile Number" value={form.mobile_number} onChange={(v) => updateField("mobile_number", v)} placeholder="Enter mobile number" required />
+        <div className="rounded-3xl bg-gradient-to-r from-blue-900 to-slate-900 p-8 text-white shadow-2xl">
 
-          <div className="md:col-span-2 flex flex-wrap items-center gap-4">
-            <button type="submit" disabled={saving} className="rounded-2xl bg-blue-700 px-6 py-3 font-bold text-white hover:bg-blue-800 disabled:opacity-70">
-              {saving ? "Saving..." : "Save and Go to Training"}
-            </button>
-            {message && <p className="text-sm font-semibold text-red-700">{message}</p>}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+            <div>
+
+              <h1 className="text-4xl font-extrabold tracking-tight">
+                Welcome, {profile?.full_name || "Employee"}
+              </h1>
+
+              <p className="mt-3 text-lg text-blue-100">
+                B V C & Co. Article / Employee Training Portal
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+
+                <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold">
+                  SRO No: {profile?.sro_number || "-"}
+                </div>
+
+                <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold">
+                  Foundation: {profile?.foundation_marks || "-"}
+                </div>
+
+                <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold">
+                  IPCC G1: {profile?.ipcc_group1_marks || "-"}
+                </div>
+
+                <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold">
+                  IPCC G2: {profile?.ipcc_group2_marks || "-"}
+                </div>
+
+              </div>
+
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+
+              <button
+                onClick={() => router.push("/profile")}
+                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:scale-105"
+              >
+                Profile
+              </button>
+
+              <button
+                onClick={() => router.push("/training")}
+                className="rounded-2xl bg-blue-500 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105"
+              >
+                Training Modules
+              </button>
+
+            </div>
+
           </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
-function Input({ label, value, onChange, placeholder, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string; required?: boolean }) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-bold text-slate-800">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-        placeholder={placeholder}
-        required={required}
-      />
+        </div>
+
+        {/* TRAINING MODULES */}
+
+        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+
+          <div className="mb-6 flex items-center justify-between">
+
+            <div>
+
+              <h2 className="text-3xl font-bold text-slate-950">
+                Training Modules
+              </h2>
+
+              <p className="mt-1 text-slate-500">
+                Complete all mandatory onboarding modules
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-2">
+
+            {modules.map((module) => {
+              const moduleProgress = getProgress(module.id);
+
+              return (
+                <div
+                  key={module.id}
+                  className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl"
+                >
+
+                  <div className="flex items-start justify-between">
+
+                    <div>
+
+                      <h3 className="text-2xl font-bold text-slate-950">
+                        {module.title}
+                      </h3>
+
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {module.description}
+                      </p>
+
+                    </div>
+
+                    <div
+                      className={`rounded-2xl px-4 py-2 text-xs font-bold ${
+                        moduleProgress?.status === "Passed"
+                          ? "bg-green-100 text-green-900"
+                          : moduleProgress?.status === "Failed"
+                          ? "bg-red-100 text-red-900"
+                          : "bg-yellow-100 text-yellow-900"
+                      }`}
+                    >
+                      {moduleProgress?.status || "Pending"}
+                    </div>
+
+                  </div>
+
+                  <div className="mt-6 space-y-3">
+
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3">
+
+                      <span className="font-semibold text-slate-700">
+                        Video
+                      </span>
+
+                      <span
+                        className={`font-bold ${
+                          moduleProgress?.watched
+                            ? "text-green-700"
+                            : "text-yellow-700"
+                        }`}
+                      >
+                        {moduleProgress?.watched
+                          ? "Completed"
+                          : "Pending"}
+                      </span>
+
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3">
+
+                      <span className="font-semibold text-slate-700">
+                        Quiz Score
+                      </span>
+
+                      <span className="font-bold text-blue-700">
+                        {moduleProgress?.marks || 0}%
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <button
+                    onClick={() => router.push(`/training/${module.id}`)}
+                    className="mt-6 w-full rounded-2xl bg-slate-900 px-5 py-4 text-sm font-bold text-white transition hover:bg-blue-700"
+                  >
+                    Open Module
+                  </button>
+
+                </div>
+              );
+            })}
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
   );
 }

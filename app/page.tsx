@@ -4,20 +4,18 @@ import Image from "next/image";
 export default function Home() {
   return (
     <div className="grid min-h-[70vh] items-center gap-8 lg:grid-cols-2">
-      
-      {/* Left Section */}
       <section className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200 sm:p-10">
         <div className="mb-4 inline-flex rounded-full bg-blue-50 px-4 py-1 text-sm font-medium text-blue-700 ring-1 ring-blue-100">
-          Internal Portal
+          Internal Training Portal
         </div>
 
         <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-          Simplify onboarding for articles and employees.
+          Build strong articles and employees through structured training.
         </h2>
 
         <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
-          Complete training modules, upload documents, and track onboarding
-          progress through one secure platform.
+          Complete training modules, attempt quizzes, and track learning progress
+          through one secure internal platform.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-4">
@@ -27,19 +25,14 @@ export default function Home() {
           >
             Login
           </Link>
-
-          <button className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-            Learn More
-          </button>
         </div>
       </section>
 
-      {/* Right Section - Image */}
       <section>
         <div className="overflow-hidden rounded-3xl shadow-xl ring-1 ring-slate-200">
           <Image
             src="/office.png"
-            alt="Office"
+            alt="Office training"
             width={800}
             height={500}
             className="h-full w-full object-cover"
@@ -47,7 +40,6 @@ export default function Home() {
           />
         </div>
       </section>
-
     </div>
   );
 }

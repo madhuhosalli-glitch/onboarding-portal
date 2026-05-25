@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Article / Employee Onboarding Portal",
-  description: "Onboarding system",
+  title: "Article / Employee Training Portal",
+  description: "Training system",
 };
 
 export default function RootLayout({
@@ -34,10 +34,10 @@ export default function RootLayout({
               <div className="h-11 w-1 rounded-full bg-blue-700" />
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                  Article / Employee Onboarding Portal
+                  Article / Employee Training Portal
                 </h1>
                 <p className="text-sm text-slate-500">
-                  Welcome to your onboarding workspace
+                  Welcome to your learning workspace
                 </p>
               </div>
             </div>

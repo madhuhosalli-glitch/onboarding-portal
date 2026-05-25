@@ -1,0 +1,36 @@
+FIRST TIME GIT SETUP - COMMAND LINE OPTION
+
+Use this only if you are comfortable with command prompt.
+
+Open Command Prompt inside your project folder.
+
+Step 1:
+git init
+
+Step 2:
+git add .
+
+Step 3:
+git commit -m "Initial onboarding portal upload"
+
+Step 4:
+Create a PRIVATE repository on GitHub.
+
+Step 5:
+Copy the repository URL from GitHub.
+
+Step 6:
+Run:
+git remote add origin YOUR_GITHUB_REPOSITORY_URL
+
+Example:
+git remote add origin https://github.com/yourusername/bvc-onboarding-portal.git
+
+Step 7:
+git branch -M main
+
+Step 8:
+git push -u origin main
+
+After this, future updates can be pushed using:
+push_to_github.bat

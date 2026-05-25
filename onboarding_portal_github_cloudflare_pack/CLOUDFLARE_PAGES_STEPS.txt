@@ -1,0 +1,46 @@
+CLOUDFLARE PAGES AUTO DEPLOYMENT
+
+1. Login to Cloudflare.
+
+2. Go to:
+   Workers & Pages
+
+3. Click:
+   Create application
+
+4. Select:
+   Pages
+
+5. Select:
+   Connect to Git
+
+6. Connect your GitHub account.
+
+7. Select your onboarding portal repository.
+
+8. Select production branch:
+   main
+
+9. Build settings:
+   Framework preset: Next.js
+   Build command: npm run build
+
+10. Output directory:
+   For static export: out
+   For standard Cloudflare Next.js deployment, follow Cloudflare's latest Next.js guide.
+
+11. Environment variables:
+   Add:
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+12. Click Save and Deploy.
+
+13. Every time you push to GitHub, Cloudflare will automatically deploy.
+
+Recommended Cloudflare security:
+1. Enable WAF managed rules.
+2. Enable DNSSEC if using your own domain.
+3. Enable Turnstile on login/signup forms.
+4. Add rate limiting for login pages.
+5. Use Zero Trust Access for admin route if possible.

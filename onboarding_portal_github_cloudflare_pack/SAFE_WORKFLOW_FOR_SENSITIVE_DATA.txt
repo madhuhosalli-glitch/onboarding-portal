@@ -1,0 +1,37 @@
+SAFE WORKFLOW FOR PAN / AADHAAR / EMPLOYEE DOCUMENT DATA
+
+Never store employee documents in GitHub.
+
+GitHub should contain only:
+- Code
+- UI files
+- configuration templates
+- documentation
+
+GitHub should NOT contain:
+- PAN copies
+- Aadhaar copies
+- bank statements
+- employee photos
+- salary data
+- database backups
+- Supabase service role key
+- .env.local
+
+Sensitive data should stay in:
+- Supabase database
+- Supabase private storage bucket
+- encrypted storage
+- access-controlled admin panel
+
+Portal security must include:
+1. Supabase RLS
+2. Private storage buckets
+3. Signed URLs
+4. Admin MFA
+5. Audit logs
+6. Restricted file types
+7. No public direct document links
+8. Cloudflare WAF
+9. Cloudflare rate limiting
+10. Strong password policy

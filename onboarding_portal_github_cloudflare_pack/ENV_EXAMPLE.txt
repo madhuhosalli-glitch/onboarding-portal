@@ -1,0 +1,11 @@
+Create a file named .env.local in your project folder.
+
+Example:
+
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+IMPORTANT:
+Do not put the service role key in frontend code.
+Do not upload .env.local to GitHub.
+The .gitignore file prevents it from being uploaded.

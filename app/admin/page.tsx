@@ -4,187 +4,234 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const ADMIN_EMAIL = "ca.madhuhegde@gmail.com";
-
-type EmployeeProfile = {
-  id: string;
-  user_id: string;
-  full_name: string;
-  sro_number: string;
-  foundation_marks: number | null;
-  ipcc_group1_marks: number | null;
-  ipcc_group2_marks: number | null;
-  personal_email: string;
-  mobile_number: string;
-  status: string;
-};
-
-type TrainingProgress = {
-  id: string;
-  user_id: string;
-  module_id: string;
-  marks: number;
-  status: string;
-  quiz_attempted: boolean;
-};
-
-type EmployeeWithTraining = EmployeeProfile & {
-  training: (TrainingProgress & { module_title?: string })[];
-};
-
 export default function AdminPage() {
   const router = useRouter();
-  const [employees, setEmployees] = useState<EmployeeWithTraining[]>([]);
+
+  const [profile, setProfile] = useState<any>(null);
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [modules, setModules] = useState<any[]>([]);
+  const [progress, setProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const init = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
+    const loadAdmin = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+
+      if (!userData.user) {
         router.push("/login");
         return;
       }
 
-      if ((data.user.email || "").toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        router.push("/training");
+      const { data: myProfile } = await supabase
+        .from("employee_profiles")
+        .select("*")
+        .eq("user_id", userData.user.id)
+        .single();
+
+      const role = (myProfile?.role || "").toLowerCase();
+
+      if (!role.includes("admin") && !role.includes("partner")) {
+        router.push("/dashboard");
         return;
       }
 
-      const { data: profiles } = await supabase.from("employee_profiles").select("*").order("created_at", { ascending: false });
-      const { data: progress } = await supabase.from("training_progress").select("*");
-      const { data: modules } = await supabase.from("training_modules").select("id, title");
+      setProfile(myProfile);
 
-      const merged = (profiles || []).map((profile) => {
-        const employeeTraining = (progress || [])
-          .filter((p) => p.user_id === profile.user_id)
-          .map((p) => {
-            const module = (modules || []).find((m) => m.id === p.module_id);
-            return { ...p, module_title: module?.title || "Unknown Module" };
-          });
+      const { data: allProfiles } = await supabase
+        .from("employee_profiles")
+        .select("*")
+        .order("full_name", { ascending: true });
 
-        return { ...profile, training: employeeTraining };
-      });
+      const { data: allModules } = await supabase
+        .from("training_modules")
+        .select("*")
+        .order("display_order", { ascending: true });
 
-      setEmployees(merged);
+      const { data: allProgress } = await supabase
+        .from("training_progress")
+        .select("*");
+
+      setProfiles(allProfiles || []);
+      setModules(allModules || []);
+      setProgress(allProgress || []);
       setLoading(false);
     };
 
-    init();
+    loadAdmin();
   }, [router]);
 
-  const updateStatus = async (userId: string, status: string) => {
-    const { error } = await supabase.from("employee_profiles").update({ status }).eq("user_id", userId);
-    if (error) {
-      setMessage("Error updating status: " + error.message);
-      return;
-    }
-    setEmployees((prev) => prev.map((e) => (e.user_id === userId ? { ...e, status } : e)));
-    setMessage(`Status updated to ${status}.`);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
   };
 
-  const total = employees.length;
-  const training = employees.filter((e) => !e.status || e.status === "Training").length;
-  const completed = employees.filter((e) => e.status === "Completed").length;
-  const review = employees.filter((e) => e.status === "Under Review").length;
-  const avgScore = (() => {
-    const scores = employees.flatMap((e) => e.training.filter((t) => t.quiz_attempted).map((t) => t.marks || 0));
-    return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-  })();
-
-  const getStatusBadge = (status?: string) => {
-    if (status === "Completed") return "bg-green-100 text-green-900 border border-green-300";
-    if (status === "Under Review") return "bg-amber-100 text-amber-900 border border-amber-300";
-    return "bg-blue-100 text-blue-900 border border-blue-300";
-  };
-
-  const getTrainingBadge = (status?: string) => {
-    if (status === "Passed") return "bg-green-100 text-green-900 border border-green-300";
-    if (status === "Failed") return "bg-red-100 text-red-900 border border-red-300";
-    return "bg-yellow-100 text-yellow-900 border border-yellow-300";
+  const getProgress = (userId: string, moduleId: string) => {
+    return progress.find(
+      (p) => p.user_id === userId && p.module_id === moduleId
+    );
   };
 
   if (loading) {
-    return <div className="p-10"><p className="text-lg font-semibold text-slate-900">Loading...</p></div>;
+    return <div className="p-10 text-xl font-bold">Loading Admin Dashboard...</div>;
   }
 
   return (
-    <div className="space-y-6 bg-slate-100 p-6">
-      <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
-        <h1 className="text-3xl font-bold text-slate-950">Admin Training Dashboard</h1>
-        <p className="mt-2 text-base font-medium text-slate-700">
-          Review article / employee training profiles, quiz results and completion progress.
-        </p>
-        {message && <p className="mt-4 rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 ring-1 ring-blue-200">{message}</p>}
-      </div>
+    <div className="min-h-screen bg-slate-100 p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <SummaryCard title="Total" value={total} bg="bg-slate-900" />
-        <SummaryCard title="Training" value={training} bg="bg-blue-700" />
-        <SummaryCard title="Completed" value={completed} bg="bg-green-700" />
-        <SummaryCard title="Review" value={review} bg="bg-amber-700" />
-        <SummaryCard title="Avg Score" value={`${avgScore}%`} bg="bg-indigo-700" />
-      </div>
-
-      {employees.map((emp) => (
-        <div key={emp.id || emp.user_id} className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
-          <div className="mb-5 flex flex-col gap-3 border-b border-slate-300 pb-4 md:flex-row md:items-center md:justify-between">
+        <div className="rounded-3xl bg-gradient-to-r from-purple-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-slate-950">{emp.full_name || "Unnamed"}</h2>
-              <p className="mt-1 text-sm font-medium text-slate-600">SRO No: {emp.sro_number || "-"}</p>
+              <h1 className="text-4xl font-extrabold">
+                Admin Dashboard
+              </h1>
+              <p className="mt-2 text-purple-100">
+                Welcome, {profile?.full_name || "Admin / Partner"}
+              </p>
             </div>
-            <span className={`inline-block rounded-full px-4 py-1.5 text-sm font-bold ${getStatusBadge(emp.status)}`}>
-              {emp.status || "Training"}
-            </span>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <InfoCard label="Foundation Marks" value={emp.foundation_marks?.toString()} />
-            <InfoCard label="IPCC / Inter Group 1" value={emp.ipcc_group1_marks?.toString()} />
-            <InfoCard label="IPCC / Inter Group 2" value={emp.ipcc_group2_marks?.toString()} />
-            <InfoCard label="Personal Email" value={emp.personal_email} />
-            <InfoCard label="Mobile No." value={emp.mobile_number} />
-            <InfoCard label="User ID" value={emp.user_id} />
-          </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
+              >
+                Dashboard
+              </button>
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button onClick={() => updateStatus(emp.user_id, "Completed")} className="rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-800">Mark Completed</button>
-            <button onClick={() => updateStatus(emp.user_id, "Under Review")} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800">Under Review</button>
-            <button onClick={() => updateStatus(emp.user_id, "Training")} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Training</button>
-          </div>
-
-          <div className="mt-8">
-            <h3 className="mb-3 text-xl font-bold text-slate-950">Training Results</h3>
-            {emp.training.length === 0 ? (
-              <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-300"><p className="font-medium text-slate-700">No training attempted yet.</p></div>
-            ) : (
-              <div className="grid gap-3">
-                {emp.training.map((tr) => (
-                  <div key={tr.id} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-300">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-base font-bold text-slate-950">{tr.module_title}</p>
-                        <p className="text-sm font-medium text-slate-700">Marks: {tr.marks}%</p>
-                      </div>
-                      <span className={`inline-block rounded-full px-4 py-1.5 text-sm font-bold ${getTrainingBadge(tr.status)}`}>
-                        {tr.status || "Not Started"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              <button
+                onClick={handleLogout}
+                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
-      ))}
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-2xl bg-slate-900 p-5 text-white shadow-lg">
+            <p className="text-sm font-bold text-slate-300">Total Users</p>
+            <p className="mt-2 text-4xl font-extrabold">{profiles.length}</p>
+          </div>
+
+          <div className="rounded-2xl bg-blue-700 p-5 text-white shadow-lg">
+            <p className="text-sm font-bold text-blue-100">Modules</p>
+            <p className="mt-2 text-4xl font-extrabold">{modules.length}</p>
+          </div>
+
+          <div className="rounded-2xl bg-green-700 p-5 text-white shadow-lg">
+            <p className="text-sm font-bold text-green-100">Video Records</p>
+            <p className="mt-2 text-4xl font-extrabold">
+              {progress.filter((p) => p.watched).length}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-purple-700 p-5 text-white shadow-lg">
+            <p className="text-sm font-bold text-purple-100">Quiz Attempts</p>
+            <p className="mt-2 text-4xl font-extrabold">
+              {progress.filter((p) => p.quiz_attempted).length}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+          <h2 className="mb-6 text-3xl font-bold text-slate-950">
+            Article / Employee Training Report
+          </h2>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full border border-slate-300 text-sm">
+              <thead>
+                <tr className="bg-slate-900 text-left text-white">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Module</th>
+                  <th className="px-4 py-3">Video</th>
+                  <th className="px-4 py-3">Quiz</th>
+                  <th className="px-4 py-3">Marks</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {profiles
+                  .filter((p) => {
+                    const role = (p.role || "").toLowerCase();
+                    return role.includes("article") || role.includes("employee");
+                  })
+                  .flatMap((person) =>
+                    modules.map((module) => {
+                      const item = getProgress(person.user_id, module.id);
+
+                      return (
+                        <tr
+                          key={`${person.user_id}-${module.id}`}
+                          className="border-b border-slate-200 bg-white text-slate-900"
+                        >
+                          <td className="px-4 py-3 font-bold">
+                            {person.full_name || "-"}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-800">
+                              {person.role || "-"}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3 font-semibold">
+                            {module.display_order}. {module.title}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                item?.watched
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {item?.watched ? "Completed" : "Pending"}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                item?.quiz_attempted
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-slate-200 text-slate-800"
+                              }`}
+                            >
+                              {item?.quiz_attempted ? "Attempted" : "Pending"}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-blue-700">
+                            {item?.marks || 0}%
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                item?.status === "Passed"
+                                  ? "bg-green-100 text-green-800"
+                                  : item?.status === "Failed"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-slate-200 text-slate-800"
+                              }`}
+                            >
+                              {item?.status || "Not Started"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
-}
-
-function SummaryCard({ title, value, bg }: { title: string; value: number | string; bg: string }) {
-  return <div className={`${bg} rounded-xl p-4 shadow-lg`}><p className="text-sm font-bold text-white/90">{title}</p><p className="mt-1 text-3xl font-extrabold text-white">{value}</p></div>;
-}
-
-function InfoCard({ label, value }: { label: string; value?: string }) {
-  return <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-300"><p className="text-sm font-bold text-slate-600">{label}</p><p className="mt-1 text-base font-semibold text-slate-950">{value || "-"}</p></div>;
 }

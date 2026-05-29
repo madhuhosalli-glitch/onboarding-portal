@@ -33,6 +33,7 @@ export default function ModulePage() {
   const lastSafeTimeRef = useRef(0);
 
   const [userId, setUserId] = useState("");
+  const [role, setRole] = useState("");
   const [module, setModule] = useState<TrainingModule | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -42,6 +43,11 @@ export default function ModulePage() {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [videoProgressPercent, setVideoProgressPercent] = useState(0);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const isAdminOrPartner =
+    role.toLowerCase().includes("admin") ||
+    role.toLowerCase().includes("partner");
 
   useEffect(() => {
     const loadData = async () => {
@@ -52,7 +58,16 @@ export default function ModulePage() {
         return;
       }
 
-      setUserId(userData.user.id);
+      const uid = userData.user.id;
+      setUserId(uid);
+
+      const { data: profileData } = await supabase
+        .from("employee_profiles")
+        .select("role")
+        .eq("user_id", uid)
+        .single();
+
+      setRole(profileData?.role || "");
 
       const { data: mod } = await supabase
         .from("training_modules")
@@ -65,12 +80,16 @@ export default function ModulePage() {
       const { data: progressData } = await supabase
         .from("training_progress")
         .select("*")
-        .eq("user_id", userData.user.id)
+        .eq("user_id", uid)
         .eq("module_id", id)
         .maybeSingle();
 
       if (progressData?.watched) {
         setVideoCompleted(true);
+      }
+
+      if (progressData?.quiz_attempted && typeof progressData?.marks === "number") {
+        setScore(progressData.marks);
       }
 
       const { data: q } = await supabase
@@ -82,23 +101,29 @@ export default function ModulePage() {
       setLoading(false);
     };
 
-    if (id) {
-      loadData();
-    }
+    if (id) loadData();
   }, [id, router]);
 
   const saveVideoCompleted = async () => {
+    if (!userId || !id) return;
+
     await supabase.from("training_progress").upsert(
       {
         user_id: userId,
         module_id: id,
         watched: true,
         video_completed_at: new Date().toISOString(),
+        status: isAdminOrPartner ? "Viewed by Admin/Partner" : "Video Completed",
       },
       { onConflict: "user_id,module_id" }
     );
 
     setVideoCompleted(true);
+    setMessage(
+      isAdminOrPartner
+        ? "Video viewing status saved. Quiz is optional for this role."
+        : "Video completed. You can now take the quiz."
+    );
   };
 
   const handleVideoTimeUpdate = () => {
@@ -107,8 +132,9 @@ export default function ModulePage() {
 
     const current = video.currentTime;
 
-    if (current > maxAllowedTimeRef.current + 1.25) {
+    if (!isAdminOrPartner && current > maxAllowedTimeRef.current + 1.25) {
       video.currentTime = lastSafeTimeRef.current;
+      setMessage("Fast-forward is disabled for Articles and Employees.");
       return;
     }
 
@@ -118,11 +144,7 @@ export default function ModulePage() {
 
     lastSafeTimeRef.current = current;
 
-    const percent = Math.min(
-      100,
-      Math.round((current / video.duration) * 100)
-    );
-
+    const percent = Math.min(100, Math.round((current / video.duration) * 100));
     setVideoProgressPercent(percent);
 
     if (percent >= 95 && !videoCompleted) {
@@ -132,11 +154,11 @@ export default function ModulePage() {
 
   const handleSeeking = () => {
     const video = videoRef.current;
-
-    if (!video) return;
+    if (!video || isAdminOrPartner) return;
 
     if (video.currentTime > maxAllowedTimeRef.current + 1.25) {
       video.currentTime = lastSafeTimeRef.current;
+      setMessage("Forward skipping is not allowed. You may pause or rewind only.");
     }
   };
 
@@ -146,16 +168,13 @@ export default function ModulePage() {
     let correct = 0;
 
     questions.forEach((q) => {
-      if (answers[q.id] === q.correct_option) {
-        correct++;
-      }
+      if (answers[q.id] === q.correct_option) correct++;
     });
 
-    const percentage = questions.length
-      ? (correct / questions.length) * 100
-      : 0;
-
+    const percentage = questions.length ? (correct / questions.length) * 100 : 0;
     const finalScore = Math.round(percentage);
+    const finalStatus =
+      finalScore >= (module.passing_marks || 60) ? "Passed" : "Failed";
 
     setScore(finalScore);
 
@@ -166,26 +185,23 @@ export default function ModulePage() {
         watched: true,
         quiz_attempted: true,
         marks: finalScore,
-        status:
-          finalScore >= (module.passing_marks || 60)
-            ? "Passed"
-            : "Failed",
+        status: finalStatus,
         completed_at: new Date().toISOString(),
       },
       { onConflict: "user_id,module_id" }
     );
+
+    setMessage("Quiz submitted successfully.");
   };
 
   if (loading || !module) {
-    return <div className="p-10">Loading...</div>;
+    return <div className="p-10 text-lg font-bold">Loading...</div>;
   }
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-5xl space-y-6">
-
         <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
-
           <div className="mb-4">
             <button
               onClick={() => router.back()}
@@ -195,17 +211,36 @@ export default function ModulePage() {
             </button>
           </div>
 
-          <h1 className="text-3xl font-bold text-slate-950">
-            {module.title}
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-950">{module.title}</h1>
 
           <p className="mt-2 text-base font-medium text-slate-700">
             {module.description}
           </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <span
+              className={`rounded-full px-4 py-2 text-sm font-bold ${
+                isAdminOrPartner
+                  ? "bg-purple-100 text-purple-900"
+                  : "bg-blue-100 text-blue-900"
+              }`}
+            >
+              Role: {role || "User"}
+            </span>
+
+            <span
+              className={`rounded-full px-4 py-2 text-sm font-bold ${
+                videoCompleted
+                  ? "bg-green-100 text-green-900"
+                  : "bg-yellow-100 text-yellow-900"
+              }`}
+            >
+              Video: {videoCompleted ? "Completed" : `${videoProgressPercent}% watched`}
+            </span>
+          </div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-lg ring-1 ring-slate-300">
-
           <video
             ref={videoRef}
             src={module.video_url}
@@ -214,27 +249,39 @@ export default function ModulePage() {
             disablePictureInPicture
             onTimeUpdate={handleVideoTimeUpdate}
             onSeeking={handleSeeking}
+            onEnded={saveVideoCompleted}
             className="h-auto w-full rounded-xl bg-black"
           />
 
           <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full rounded-full bg-blue-700 transition-all"
-              style={{
-                width: `${videoCompleted ? 100 : videoProgressPercent}%`,
-              }}
+              className={`h-full rounded-full transition-all ${
+                isAdminOrPartner ? "bg-purple-700" : "bg-blue-700"
+              }`}
+              style={{ width: `${videoCompleted ? 100 : videoProgressPercent}%` }}
             />
           </div>
 
           <p className="mt-3 text-sm font-medium text-slate-700">
-            Video Progress:{" "}
-            {videoCompleted
-              ? "Completed"
-              : `${videoProgressPercent}% watched`}
+            {isAdminOrPartner
+              ? "Admin/Partner access: forwarding is allowed and quiz is optional."
+              : "Article/Employee access: pause and rewind allowed. Forward skipping is disabled."}
           </p>
         </div>
 
-        {!videoCompleted ? (
+        {isAdminOrPartner ? (
+          <div className="rounded-2xl bg-purple-50 p-6 ring-1 ring-purple-300">
+            <p className="font-semibold text-purple-900">
+              Quiz is not mandatory for Admins and Partners.
+            </p>
+            <button
+              onClick={() => setShowQuiz(!showQuiz)}
+              className="mt-4 rounded-xl bg-purple-700 px-6 py-3 font-bold text-white hover:bg-purple-800"
+            >
+              {showQuiz ? "Hide Quiz Preview" : "Preview Quiz"}
+            </button>
+          </div>
+        ) : !videoCompleted ? (
           <div className="rounded-2xl bg-yellow-50 p-6 ring-1 ring-yellow-300">
             <p className="font-semibold text-yellow-900">
               Please complete the video to unlock the quiz.
@@ -242,20 +289,19 @@ export default function ModulePage() {
           </div>
         ) : !showQuiz ? (
           <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
-
             <button
               onClick={() => setShowQuiz(true)}
               className="rounded-xl bg-green-700 px-6 py-3 font-bold text-white hover:bg-green-800"
             >
               Take Quiz
             </button>
-
           </div>
-        ) : (
-          <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
+        ) : null}
 
+        {showQuiz && (
+          <div className="rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-300">
             <h2 className="mb-4 text-xl font-bold text-slate-950">
-              Quiz
+              {isAdminOrPartner ? "Quiz Preview" : "Quiz"}
             </h2>
 
             {questions.map((q, index) => (
@@ -288,12 +334,14 @@ export default function ModulePage() {
               </div>
             ))}
 
-            <button
-              onClick={submitQuiz}
-              className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-800"
-            >
-              Submit Quiz
-            </button>
+            {!isAdminOrPartner && (
+              <button
+                onClick={submitQuiz}
+                className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-800"
+              >
+                Submit Quiz
+              </button>
+            )}
 
             {score !== null && (
               <div
@@ -306,6 +354,12 @@ export default function ModulePage() {
                 Your Score: {score}%
               </div>
             )}
+          </div>
+        )}
+
+        {message && (
+          <div className="rounded-2xl bg-blue-50 p-4 font-semibold text-blue-900 ring-1 ring-blue-300">
+            {message}
           </div>
         )}
       </div>

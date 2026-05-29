@@ -1,0 +1,40 @@
+HOW TO BULK CREATE OFFICE LOGINS
+
+1. In Supabase, run:
+   STEP_1_ROLE_SETUP.sql
+
+2. Copy these two files into your project root folder:
+   office_users.csv
+   bulk_create_users.mjs
+
+3. Create or update .env.local in the project root:
+
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   DEFAULT_PASSWORD=BVC@2026!
+
+IMPORTANT:
+- SUPABASE_SERVICE_ROLE_KEY must never be uploaded to GitHub.
+- Keep it only in .env.local.
+- .env.local must be in .gitignore.
+
+4. Open Command Prompt in project folder and run:
+
+   node bulk_create_users.mjs
+
+5. Users can login with:
+   Email: their official email ID
+   Password: BVC@2026!
+
+6. Ask users to change password after first login.
+
+ROLE RULES:
+- Article Assistant -> article
+- Employee -> employee
+- Admin -> admin
+- Partner -> partner
+
+ACCESS RULES TO IMPLEMENT IN PORTAL:
+- article/employee: video lock applies, cannot fast-forward, quiz mandatory.
+- admin/partner: video can be watched with forward option, quiz not required.
+- admin/partner: can access dashboard of all article/employee video status and quiz marks.

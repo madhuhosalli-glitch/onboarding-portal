@@ -480,7 +480,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-4 pl-2 md:mt-0 md:pl-6">
               <button
                 onClick={() => router.push("/profile")}
                 className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:scale-105"
@@ -490,15 +490,22 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => router.push("/training")}
-                className="rounded-2xl bg-blue-500 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105"
+                className="rounded-2xl bg-blue-500 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105 hover:bg-blue-600"
               >
                 Training Modules
+              </button>
+
+              <button
+                onClick={() => router.push("/sops")}
+                className="rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105 hover:bg-indigo-700"
+              >
+                SOP Library
               </button>
 
               {isAdminOrPartner && (
                 <button
                   onClick={() => router.push("/admin")}
-                  className="rounded-2xl bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105"
+                  className="rounded-2xl bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105 hover:bg-purple-700"
                 >
                   Admin Dashboard
                 </button>

@@ -11,7 +11,13 @@ export default function AdminPage() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
+
+  const [sopCategories, setSopCategories] = useState<any[]>([]);
+  const [sops, setSops] = useState<any[]>([]);
+  const [sopReadStatus, setSopReadStatus] = useState<any[]>([]);
+
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"training" | "sops">("training");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,9 +58,27 @@ export default function AdminPage() {
         .from("training_progress")
         .select("*");
 
+      const { data: allSopCategories } = await supabase
+        .from("sop_categories")
+        .select("*")
+        .order("display_order", { ascending: true });
+
+      const { data: allSops } = await supabase
+        .from("sops")
+        .select("*")
+        .eq("active", true)
+        .order("display_order", { ascending: true });
+
+      const { data: allSopReadStatus } = await supabase
+        .from("sop_read_status")
+        .select("*");
+
       setProfiles(allProfiles || []);
       setModules(allModules || []);
       setProgress(allProgress || []);
+      setSopCategories(allSopCategories || []);
+      setSops(allSops || []);
+      setSopReadStatus(allSopReadStatus || []);
       setLoading(false);
     };
 
@@ -66,18 +90,23 @@ export default function AdminPage() {
     router.push("/login");
   };
 
-  const getProgress = (userId: string, moduleId: string) => {
+  const reportUsers = profiles.filter((p) => {
+    const role = (p.role || "").toLowerCase();
+    return role.includes("article") || role.includes("employee");
+  });
+
+  const getTrainingProgress = (userId: string, moduleId: string) => {
     return progress.find(
       (p) => p.user_id === userId && p.module_id === moduleId
     );
   };
 
-  const getUserProgress = (userId: string) => {
+  const getUserTrainingProgress = (userId: string) => {
     return progress.filter((p) => p.user_id === userId);
   };
 
-  const getSummary = (person: any) => {
-    const userProgress = getUserProgress(person.user_id);
+  const getTrainingSummary = (person: any) => {
+    const userProgress = getUserTrainingProgress(person.user_id);
 
     const totalModules = modules.length;
     const videosCompleted = userProgress.filter((p) => p.watched).length;
@@ -112,68 +141,81 @@ export default function AdminPage() {
     };
   };
 
-  const reportUsers = profiles.filter((p) => {
-    const role = (p.role || "").toLowerCase();
-    return role.includes("article") || role.includes("employee");
-  });
+  const isSopRead = (userId: string, sopId: string) => {
+    return sopReadStatus.some((r) => r.user_id === userId && r.sop_id === sopId);
+  };
+
+  const getSopReadItem = (userId: string, sopId: string) => {
+    return sopReadStatus.find((r) => r.user_id === userId && r.sop_id === sopId);
+  };
+
+  const getSopSummary = (person: any) => {
+    const readCount = sopReadStatus.filter((r) => r.user_id === person.user_id).length;
+    const totalSops = sops.length;
+    const completionPercent =
+      totalSops > 0 ? Math.round((readCount / totalSops) * 100) : 0;
+
+    let status = "Not Started";
+
+    if (completionPercent === 100) status = "Completed";
+    else if (readCount > 0) status = "In Progress";
+
+    return {
+      readCount,
+      totalSops,
+      completionPercent,
+      status,
+    };
+  };
 
   const totalUsers = reportUsers.length;
-  const completedUsers = reportUsers.filter(
-    (p) => getSummary(p).overallPercent === 100
+
+  const trainingCompletedUsers = reportUsers.filter(
+    (p) => getTrainingSummary(p).overallPercent === 100
   ).length;
-  const inProgressUsers = reportUsers.filter(
-    (p) => getSummary(p).status === "In Progress"
+
+  const trainingInProgressUsers = reportUsers.filter(
+    (p) => getTrainingSummary(p).status === "In Progress"
   ).length;
-  const notStartedUsers = reportUsers.filter(
-    (p) => getSummary(p).status === "Not Started"
+
+  const trainingNotStartedUsers = reportUsers.filter(
+    (p) => getTrainingSummary(p).status === "Not Started"
+  ).length;
+
+  const sopCompletedUsers = reportUsers.filter(
+    (p) => getSopSummary(p).completionPercent === 100
+  ).length;
+
+  const sopInProgressUsers = reportUsers.filter(
+    (p) => getSopSummary(p).status === "In Progress"
+  ).length;
+
+  const sopNotStartedUsers = reportUsers.filter(
+    (p) => getSopSummary(p).status === "Not Started"
   ).length;
 
   if (loading) {
     return (
-      <div className="p-10 text-xl font-bold">
+      <div className="p-10 text-xl font-bold text-slate-900">
         Loading Admin Dashboard...
       </div>
     );
   }
 
-  if (selectedUser) {
-    const summary = getSummary(selectedUser);
+  if (selectedUser && activeTab === "training") {
+    const summary = getTrainingSummary(selectedUser);
 
     return (
       <div className="min-h-screen bg-slate-100 p-6">
         <div className="mx-auto max-w-7xl space-y-6">
-          <div className="rounded-3xl bg-gradient-to-r from-purple-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
-            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-4xl font-extrabold">
-                  {selectedUser.full_name}
-                </h1>
-                <p className="mt-2 text-purple-100">
-                  Module-wise Training Report
-                </p>
-                <p className="mt-2 text-sm text-purple-200">
-                  Role: {selectedUser.role || "-"} | Overall Completion:{" "}
-                  {summary.overallPercent}%
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-                >
-                  ← Back to Users
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
+          <Header
+            title={selectedUser.full_name || "User"}
+            subtitle="Module-wise Training Report"
+            detail={`Role: ${selectedUser.role || "-"} | Overall Completion: ${summary.overallPercent}%`}
+            onBack={() => setSelectedUser(null)}
+            onDashboard={() => router.push("/dashboard")}
+            onLogout={handleLogout}
+          />
 
           <div className="grid gap-4 md:grid-cols-4">
             <SummaryCard title="Video Completed" value={`${summary.videosCompleted}/${modules.length}`} color="bg-green-700" />
@@ -201,13 +243,10 @@ export default function AdminPage() {
 
                 <tbody>
                   {modules.map((module) => {
-                    const item = getProgress(selectedUser.user_id, module.id);
+                    const item = getTrainingProgress(selectedUser.user_id, module.id);
 
                     return (
-                      <tr
-                        key={module.id}
-                        className="border-b border-slate-200 bg-white text-slate-900"
-                      >
+                      <tr key={module.id} className="border-b border-slate-200 bg-white text-slate-900">
                         <td className="px-4 py-3 font-bold">
                           {module.display_order}. {module.title}
                         </td>
@@ -215,22 +254,14 @@ export default function AdminPage() {
                         <td className="px-4 py-3">
                           <Badge
                             text={item?.watched ? "Completed" : "Pending"}
-                            color={
-                              item?.watched
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }
+                            color={item?.watched ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}
                           />
                         </td>
 
                         <td className="px-4 py-3">
                           <Badge
                             text={item?.quiz_attempted ? "Attempted" : "Pending"}
-                            color={
-                              item?.quiz_attempted
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-slate-200 text-slate-800"
-                            }
+                            color={item?.quiz_attempted ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-800"}
                           />
                         </td>
 
@@ -262,6 +293,104 @@ export default function AdminPage() {
     );
   }
 
+  if (selectedUser && activeTab === "sops") {
+    const summary = getSopSummary(selectedUser);
+
+    return (
+      <div className="min-h-screen bg-slate-100 p-6">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <Header
+            title={selectedUser.full_name || "User"}
+            subtitle="SOP-wise Reading Report"
+            detail={`Role: ${selectedUser.role || "-"} | SOP Completion: ${summary.completionPercent}%`}
+            onBack={() => setSelectedUser(null)}
+            onDashboard={() => router.push("/dashboard")}
+            onLogout={handleLogout}
+          />
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <SummaryCard title="SOPs Read" value={`${summary.readCount}/${sops.length}`} color="bg-green-700" />
+            <SummaryCard title="Completion" value={`${summary.completionPercent}%`} color="bg-indigo-700" />
+            <SummaryCard title="Status" value={summary.status} color="bg-slate-900" />
+          </div>
+
+          {sopCategories.map((category) => {
+            const categorySops = sops.filter((s) => s.category_id === category.id);
+            const categoryRead = categorySops.filter((s) =>
+              isSopRead(selectedUser.user_id, s.id)
+            ).length;
+
+            const categoryPercent =
+              categorySops.length > 0
+                ? Math.round((categoryRead / categorySops.length) * 100)
+                : 0;
+
+            return (
+              <div key={category.id} className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-3xl font-bold text-slate-950">
+                      {category.name}
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">
+                      {categoryRead}/{categorySops.length} SOPs read
+                    </p>
+                  </div>
+
+                  <ProgressBar percent={categoryPercent} />
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border border-slate-300 text-sm">
+                    <thead>
+                      <tr className="bg-slate-900 text-left text-white">
+                        <th className="px-4 py-3">SOP</th>
+                        <th className="px-4 py-3">Description</th>
+                        <th className="px-4 py-3">Read Status</th>
+                        <th className="px-4 py-3">Read Date</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {categorySops.map((sop) => {
+                        const readItem = getSopReadItem(selectedUser.user_id, sop.id);
+
+                        return (
+                          <tr key={sop.id} className="border-b border-slate-200 bg-white text-slate-900">
+                            <td className="px-4 py-3 font-bold">
+                              {sop.display_order}. {sop.title}
+                            </td>
+
+                            <td className="px-4 py-3 text-slate-700">
+                              {sop.description || "-"}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <Badge
+                                text={readItem ? "Read" : "Pending"}
+                                color={readItem ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}
+                              />
+                            </td>
+
+                            <td className="px-4 py-3 font-semibold text-slate-700">
+                              {readItem?.read_at
+                                ? new Date(readItem.read_at).toLocaleString()
+                                : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -275,7 +404,7 @@ export default function AdminPage() {
                 Welcome, {profile?.full_name || "Admin / Partner"}
               </p>
               <p className="mt-2 text-sm text-purple-200">
-                First screen shows user-wise overall progress. Click any user to view module-wise details.
+                View training completion and SOP reading status of all articles and employees.
               </p>
             </div>
 
@@ -297,110 +426,260 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
-          <SummaryCard title="Completed" value={completedUsers} color="bg-green-700" />
-          <SummaryCard title="In Progress" value={inProgressUsers} color="bg-blue-700" />
-          <SummaryCard title="Not Started" value={notStartedUsers} color="bg-yellow-600" />
+        <div className="rounded-3xl bg-white p-4 shadow-xl ring-1 ring-slate-200">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                setActiveTab("training");
+                setSelectedUser(null);
+              }}
+              className={`rounded-2xl px-6 py-3 text-sm font-bold ${
+                activeTab === "training"
+                  ? "bg-blue-700 text-white"
+                  : "bg-slate-100 text-slate-800"
+              }`}
+            >
+              Training Dashboard
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("sops");
+                setSelectedUser(null);
+              }}
+              className={`rounded-2xl px-6 py-3 text-sm font-bold ${
+                activeTab === "sops"
+                  ? "bg-indigo-700 text-white"
+                  : "bg-slate-100 text-slate-800"
+              }`}
+            >
+              SOP Dashboard
+            </button>
+          </div>
         </div>
 
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-          <h2 className="mb-6 text-3xl font-bold text-slate-950">
-            User-wise Training Summary
-          </h2>
+        {activeTab === "training" ? (
+          <>
+            <div className="grid gap-4 md:grid-cols-4">
+              <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
+              <SummaryCard title="Completed" value={trainingCompletedUsers} color="bg-green-700" />
+              <SummaryCard title="In Progress" value={trainingInProgressUsers} color="bg-blue-700" />
+              <SummaryCard title="Not Started" value={trainingNotStartedUsers} color="bg-yellow-600" />
+            </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full border border-slate-300 text-sm">
-              <thead>
-                <tr className="bg-slate-900 text-left text-white">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Videos</th>
-                  <th className="px-4 py-3">Quizzes</th>
-                  <th className="px-4 py-3">Avg Marks</th>
-                  <th className="px-4 py-3">Overall %</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Action</th>
-                </tr>
-              </thead>
+            <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+              <h2 className="mb-6 text-3xl font-bold text-slate-950">
+                User-wise Training Summary
+              </h2>
 
-              <tbody>
-                {reportUsers.map((person) => {
-                  const summary = getSummary(person);
-
-                  return (
-                    <tr
-                      key={person.user_id}
-                      className="border-b border-slate-200 bg-white text-slate-900"
-                    >
-                      <td className="px-4 py-3 font-bold">
-                        {person.full_name || "-"}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <Badge
-                          text={person.role || "-"}
-                          color="bg-slate-200 text-slate-800"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-green-700">
-                        {summary.videosCompleted}/{modules.length}
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-blue-700">
-                        {summary.quizzesAttempted}/{modules.length}
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-indigo-700">
-                        {summary.avgMarks}%
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="h-3 w-32 overflow-hidden rounded-full bg-slate-200">
-                          <div
-                            className={`h-full rounded-full ${
-                              summary.overallPercent === 100
-                                ? "bg-green-600"
-                                : summary.overallPercent > 0
-                                ? "bg-blue-600"
-                                : "bg-yellow-500"
-                            }`}
-                            style={{ width: `${summary.overallPercent}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-xs font-bold text-slate-700">
-                          {summary.overallPercent}%
-                        </p>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <Badge
-                          text={summary.status}
-                          color={
-                            summary.status === "Completed"
-                              ? "bg-green-100 text-green-800"
-                              : summary.status === "In Progress"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }
-                        />
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => setSelectedUser(person)}
-                          className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
-                        >
-                          View Details
-                        </button>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-slate-300 text-sm">
+                  <thead>
+                    <tr className="bg-slate-900 text-left text-white">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3">Videos</th>
+                      <th className="px-4 py-3">Quizzes</th>
+                      <th className="px-4 py-3">Avg Marks</th>
+                      <th className="px-4 py-3">Overall %</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Action</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+
+                  <tbody>
+                    {reportUsers.map((person) => {
+                      const summary = getTrainingSummary(person);
+
+                      return (
+                        <tr key={person.user_id} className="border-b border-slate-200 bg-white text-slate-900">
+                          <td className="px-4 py-3 font-bold">
+                            {person.full_name || "-"}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Badge text={person.role || "-"} color="bg-slate-200 text-slate-800" />
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-green-700">
+                            {summary.videosCompleted}/{modules.length}
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-blue-700">
+                            {summary.quizzesAttempted}/{modules.length}
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-indigo-700">
+                            {summary.avgMarks}%
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <ProgressBar percent={summary.overallPercent} />
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Badge
+                              text={summary.status}
+                              color={
+                                summary.status === "Completed"
+                                  ? "bg-green-100 text-green-800"
+                                  : summary.status === "In Progress"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }
+                            />
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setSelectedUser(person)}
+                              className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-4">
+              <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
+              <SummaryCard title="Completed" value={sopCompletedUsers} color="bg-green-700" />
+              <SummaryCard title="In Progress" value={sopInProgressUsers} color="bg-indigo-700" />
+              <SummaryCard title="Not Started" value={sopNotStartedUsers} color="bg-yellow-600" />
+            </div>
+
+            <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
+              <h2 className="mb-6 text-3xl font-bold text-slate-950">
+                User-wise SOP Reading Summary
+              </h2>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-slate-300 text-sm">
+                  <thead>
+                    <tr className="bg-slate-900 text-left text-white">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3">SOPs Read</th>
+                      <th className="px-4 py-3">Total SOPs</th>
+                      <th className="px-4 py-3">Completion %</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {reportUsers.map((person) => {
+                      const summary = getSopSummary(person);
+
+                      return (
+                        <tr key={person.user_id} className="border-b border-slate-200 bg-white text-slate-900">
+                          <td className="px-4 py-3 font-bold">
+                            {person.full_name || "-"}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Badge text={person.role || "-"} color="bg-slate-200 text-slate-800" />
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-green-700">
+                            {summary.readCount}
+                          </td>
+
+                          <td className="px-4 py-3 font-bold text-slate-800">
+                            {summary.totalSops}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <ProgressBar percent={summary.completionPercent} />
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Badge
+                              text={summary.status}
+                              color={
+                                summary.status === "Completed"
+                                  ? "bg-green-100 text-green-800"
+                                  : summary.status === "In Progress"
+                                  ? "bg-indigo-100 text-indigo-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }
+                            />
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setSelectedUser(person)}
+                              className="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800"
+                            >
+                              View SOP Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Header({
+  title,
+  subtitle,
+  detail,
+  onBack,
+  onDashboard,
+  onLogout,
+}: {
+  title: string;
+  subtitle: string;
+  detail: string;
+  onBack: () => void;
+  onDashboard: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="rounded-3xl bg-gradient-to-r from-purple-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-4xl font-extrabold">{title}</h1>
+          <p className="mt-2 text-purple-100">{subtitle}</p>
+          <p className="mt-2 text-sm text-purple-200">{detail}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={onBack}
+            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
+          >
+            ← Back
+          </button>
+
+          <button
+            onClick={onDashboard}
+            className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white"
+          >
+            Dashboard
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </div>
@@ -429,5 +708,28 @@ function Badge({ text, color }: { text: string; color: string }) {
     <span className={`rounded-full px-3 py-1 text-xs font-bold ${color}`}>
       {text}
     </span>
+  );
+}
+
+function ProgressBar({ percent }: { percent: number }) {
+  return (
+    <div>
+      <div className="h-3 w-32 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={`h-full rounded-full ${
+            percent === 100
+              ? "bg-green-600"
+              : percent > 0
+              ? "bg-indigo-600"
+              : "bg-yellow-500"
+          }`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      <p className="mt-1 text-xs font-bold text-slate-700">
+        {percent}%
+      </p>
+    </div>
   );
 }

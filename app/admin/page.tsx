@@ -417,6 +417,13 @@ export default function AdminPage() {
               </button>
 
               <button
+                onClick={() => router.push("/admin/laptops")}
+                className="rounded-2xl bg-cyan-600 px-6 py-3 text-sm font-bold text-white"
+              >
+                Laptop Management
+              </button>
+
+              <button
                 onClick={handleLogout}
                 className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
               >

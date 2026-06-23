@@ -502,6 +502,13 @@ export default function DashboardPage() {
                 SOP Library
               </button>
 
+              <button
+                onClick={() => router.push("/laptops")}
+                className="rounded-2xl bg-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:scale-105 hover:bg-cyan-800"
+              >
+                Laptop Support
+              </button>
+
               {isAdminOrPartner && (
                 <button
                   onClick={() => router.push("/admin")}

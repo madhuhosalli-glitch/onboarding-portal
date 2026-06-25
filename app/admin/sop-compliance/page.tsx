@@ -8,8 +8,24 @@ type ModuleRow = { id: string; name: string; display_order: number };
 type ChecklistRow = { id: string; module_id: string; name: string; frequency: string; display_order: number; active: boolean };
 type Profile = { user_id: string; full_name: string | null; official_email: string | null; personal_email: string | null; role: string | null };
 type Assignment = { id: string; checklist_id: string; employee_user_id: string; active: boolean };
-type Submission = { id: string; checklist_id: string; status: string; period_label: string | null; period_start: string | null; period_end: string | null; submitted_by_name: string | null; submitted_at: string | null; created_at: string };
-type SopItem = { id: string; checklist_id: string; item_text: string; display_order: number };
+type Submission = {
+  id: string;
+  checklist_id: string;
+  status: string;
+  submission_date: string | null;
+  period_label: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+  created_at: string; 
+};
+type SopItem = {
+  id: string;
+  checklist_id: string;
+  item_text: string;
+  display_order: number;
+};
 
 export default function SopCompliancePage() {
   const router = useRouter();

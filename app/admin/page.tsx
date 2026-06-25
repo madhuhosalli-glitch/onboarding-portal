@@ -95,6 +95,9 @@ export default function AdminPage() {
     return role.includes("article") || role.includes("employee");
   });
 
+  const activeEmployees = profiles.filter((p) => p.active_for_assignment !== false);
+  const pastEmployees = profiles.filter((p) => p.active_for_assignment === false);
+
   const getTrainingProgress = (userId: string, moduleId: string) => {
     return progress.find(
       (p) => p.user_id === userId && p.module_id === moduleId
@@ -404,33 +407,66 @@ export default function AdminPage() {
                 Welcome, {profile?.full_name || "Admin / Partner"}
               </p>
               <p className="mt-2 text-sm text-purple-200">
-                View training completion and SOP reading status of all articles and employees.
+                Manage employee records, training, SOPs, laptops and internal systems.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => router.push("/dashboard")}
-                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
+                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100"
               >
-                Dashboard
-              </button>
-
-              <button
-                onClick={() => router.push("/admin/laptops")}
-                className="rounded-2xl bg-cyan-600 px-6 py-3 text-sm font-bold text-white"
-              >
-                Laptop Management
+                ← Back to Main Portal
               </button>
 
               <button
                 onClick={handleLogout}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
+                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700"
               >
                 Logout
               </button>
             </div>
           </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
+          <SummaryCard title="Active Employees" value={activeEmployees.length} color="bg-green-700" />
+          <SummaryCard title="Past Employees" value={pastEmployees.length} color="bg-purple-700" />
+          <SummaryCard title="Training Completed" value={trainingCompletedUsers} color="bg-blue-700" />
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-3">
+          <NavigationCard
+            title="Employee Management"
+            description="Manage active employees, past employees and employee database."
+            button="Open Employees"
+            color="from-emerald-700 to-slate-900"
+            onClick={() => router.push("/admin/employees")}
+          />
+
+          <NavigationCard
+            title="Laptop Management"
+            description="Manage laptops, assignments, transfers and complaints."
+            button="Open Laptops"
+            color="from-cyan-700 to-slate-900"
+            onClick={() => router.push("/admin/laptops")}
+          />
+          <NavigationCard
+            title="SOP Compliance"
+            description="Assign SOPs to administrators, complete compliance checklists, review exceptions and monitor adherence."
+            button="Open SOP Compliance"
+            color="from-indigo-700 to-slate-900"
+            onClick={() => router.push("/admin/sop-compliance")}
+          />
+
+          <NavigationCard
+            title="Main Dashboard"
+            description="Go back to your personal dashboard and portal shortcuts."
+            button="Open Dashboard"
+            color="from-blue-700 to-slate-900"
+            onClick={() => router.push("/dashboard")}
+          />
         </div>
 
         <div className="rounded-3xl bg-white p-4 shadow-xl ring-1 ring-slate-200">
@@ -638,6 +674,33 @@ export default function AdminPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function NavigationCard({
+  title,
+  description,
+  button,
+  color,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  button: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className={`rounded-3xl bg-gradient-to-br ${color} p-6 text-white shadow-xl`}>
+      <h2 className="text-2xl font-extrabold">{title}</h2>
+      <p className="mt-2 min-h-12 text-sm text-white/80">{description}</p>
+      <button
+        onClick={onClick}
+        className="mt-5 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100"
+      >
+        {button}
+      </button>
     </div>
   );
 }

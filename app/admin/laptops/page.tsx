@@ -103,7 +103,6 @@ const blankLaptop: LaptopForm = {
   vendor: "",
   purchase_price: "",
   accessories: "",
-  accessories: "",
   antivirus_name: "",
   antivirus_license_key: "",
   antivirus_expiry: "",

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Article / Employee Training Portal",
-  description: "Training and learning system",
+  title: "BVC Office Portal",
+  description: "Training, SOPs, IT Assets and Office Operations",
 };
 
 export default function RootLayout({
@@ -29,30 +29,30 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-slate-50 text-slate-900">
         <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-10">
-            <div className="flex items-center gap-4">
-              <div className="h-11 w-1 rounded-full bg-blue-700" />
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-2 lg:px-8">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-1 rounded-full bg-blue-700" />
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-                  Article / Employee Training Portal
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">
+                  BVC Office Portal
                 </h1>
-                <p className="text-sm text-slate-500">
-                  Welcome to your learning workspace
+                <p className="text-xs text-slate-500">
+                  Training • SOPs • IT Assets • Office Operations
                 </p>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-slate-200">
+            <div className="rounded-xl bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200">
               <img
                 src="/logo.png"
                 alt="B V C & Co. Logo"
-                className="h-24 object-contain"
+                className="h-14 object-contain"
               />
             </div>
           </div>
         </header>
 
-        <main className="mx-auto min-h-[calc(100vh-110px)] max-w-7xl px-6 py-10 lg:px-10">
+        <main className="mx-auto min-h-[calc(100vh-78px)] max-w-7xl px-5 py-4 lg:px-8">
           {children}
         </main>
       </body>

@@ -37,11 +37,11 @@ export default function TrainingPage() {
 
       const { data: profile } = await supabase
         .from("employee_profiles")
-        .select("full_name,sro_number")
+        .select("full_name,role,sro_number")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (!profile?.full_name || !profile?.sro_number) {
+      if (!profile?.full_name) {
         router.replace("/dashboard");
         return;
       }
@@ -103,9 +103,9 @@ export default function TrainingPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
           <div>
-            <h1 className="text-3xl font-bold text-slate-950">Training Modules</h1>
+            <h1 className="text-3xl font-bold text-slate-950">Training & Learning</h1>
             <p className="mt-2 text-slate-700">
-              Complete each module and attempt the quiz. Your marks and completion status will be tracked automatically.
+              Complete assigned onboarding modules, attempt quizzes and track your learning progress.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -115,7 +115,7 @@ export default function TrainingPage() {
               </button>
             )}
             <button onClick={() => router.push("/dashboard")} className="rounded-xl bg-indigo-700 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-800">
-              Profile
+              Back to Office Portal
             </button>
             <button onClick={handleLogout} className="rounded-xl bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-800">
               Logout

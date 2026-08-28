@@ -63,49 +63,68 @@ export default function DashboardPage() {
   const needsFirstLoginForm = articleProfileIncomplete || normalProfileIncomplete;
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadDashboard = async () => {
-      const { data: userData } = await supabase.auth.getUser();
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
 
-      if (!userData.user) {
-        router.push("/login");
-        return;
+        if (userError || !userData.user) {
+          router.replace("/login");
+          return;
+        }
+
+        const uid = userData.user.id;
+        if (!cancelled) {
+          setUserId(uid);
+          setUserEmail(userData.user.email || "");
+        }
+
+        const [profileResult, modulesResult, progressResult] = await Promise.all([
+          supabase
+            .from("employee_profiles")
+            .select("user_id,full_name,personal_email,mobile_number,sro_number,foundation_marks,ipcc_group1_marks,ipcc_group2_marks,role,password_changed")
+            .eq("user_id", uid)
+            .single(),
+          supabase
+            .from("training_modules")
+            .select("id,title,description,display_order")
+            .order("display_order", { ascending: true }),
+          supabase
+            .from("training_progress")
+            .select("module_id,status,quiz_attempted,marks,watched")
+            .eq("user_id", uid),
+        ]);
+
+        if (profileResult.error) console.error("Profile load error:", profileResult.error);
+        if (modulesResult.error) console.error("Training modules load error:", modulesResult.error);
+        if (progressResult.error) console.error("Training progress load error:", progressResult.error);
+
+        if (cancelled) return;
+
+        const profileData = profileResult.data;
+        setProfile(profileData);
+        setFullName(profileData?.full_name || "");
+        setPersonalEmail(profileData?.personal_email || "");
+        setMobileNumber(profileData?.mobile_number || "");
+        setSroNumber(profileData?.sro_number || "");
+        setFoundationMarks(profileData?.foundation_marks || "");
+        setIpccGroup1Marks(profileData?.ipcc_group1_marks || "");
+        setIpccGroup2Marks(profileData?.ipcc_group2_marks || "");
+        setModules(modulesResult.data || []);
+        setProgress(progressResult.data || []);
+      } catch (error) {
+        console.error("Dashboard load failed:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const uid = userData.user.id;
-      setUserId(uid);
-      setUserEmail(userData.user.email || "");
-
-      const { data: profileData } = await supabase
-        .from("employee_profiles")
-        .select("*")
-        .eq("user_id", uid)
-        .single();
-
-      setProfile(profileData);
-      setFullName(profileData?.full_name || "");
-      setPersonalEmail(profileData?.personal_email || "");
-      setMobileNumber(profileData?.mobile_number || "");
-      setSroNumber(profileData?.sro_number || "");
-      setFoundationMarks(profileData?.foundation_marks || "");
-      setIpccGroup1Marks(profileData?.ipcc_group1_marks || "");
-      setIpccGroup2Marks(profileData?.ipcc_group2_marks || "");
-
-      const { data: modulesData } = await supabase
-        .from("training_modules")
-        .select("*")
-        .order("display_order", { ascending: true });
-
-      const { data: progressData } = await supabase
-        .from("training_progress")
-        .select("*")
-        .eq("user_id", uid);
-
-      setModules(modulesData || []);
-      setProgress(progressData || []);
-      setLoading(false);
     };
 
     loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const handleChangePassword = async (e: React.FormEvent<HTMLFormElement>) => {

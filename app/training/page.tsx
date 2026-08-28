@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-
-const ADMIN_EMAIL = "ca.madhuhegde@gmail.com";
 
 type TrainingModule = {
   id: string;
   title: string;
   description: string;
+  display_order?: number;
   progress?: {
     status: string;
     marks: number;
@@ -21,59 +20,75 @@ export default function TrainingPage() {
   const router = useRouter();
   const [modules, setModules] = useState<TrainingModule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userEmail, setUserEmail] = useState("");
+  const [role, setRole] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadModules = async () => {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
 
-      if (userError || !userData.user) {
-        router.push("/login");
-        return;
+        if (userError || !userData.user) {
+          router.replace("/login");
+          return;
+        }
+
+        const user = userData.user;
+
+        const [profileResult, modulesResult, progressResult] = await Promise.all([
+          supabase
+            .from("employee_profiles")
+            .select("full_name,role")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("training_modules")
+            .select("id,title,description,display_order")
+            .order("display_order", { ascending: true }),
+          supabase
+            .from("training_progress")
+            .select("module_id,status,marks,quiz_attempted")
+            .eq("user_id", user.id),
+        ]);
+
+        if (cancelled) return;
+
+        if (profileResult.error) console.error("Profile load error:", profileResult.error);
+        if (modulesResult.error) console.error("Training modules load error:", modulesResult.error);
+        if (progressResult.error) console.error("Training progress load error:", progressResult.error);
+
+        const profile = profileResult.data;
+
+        if (!profile?.full_name) {
+          router.replace("/dashboard");
+          return;
+        }
+
+        setRole(profile.role || "");
+
+        const progressMap = new Map(
+          (progressResult.data || []).map((p) => [p.module_id, p])
+        );
+
+        const merged = (modulesResult.data || []).map((mod) => ({
+          ...mod,
+          progress: progressMap.get(mod.id) || null,
+        }));
+
+        setModules(merged);
+      } catch (error) {
+        console.error("Training page load failed:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const user = userData.user;
-      setUserEmail(user.email || "");
-
-      const { data: profile } = await supabase
-        .from("employee_profiles")
-        .select("full_name,role,sro_number")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!profile?.full_name) {
-        router.replace("/dashboard");
-        return;
-      }
-
-      const { data: modulesData, error: modulesError } = await supabase
-        .from("training_modules")
-        .select("*")
-        .order("created_at", { ascending: true });
-
-      if (modulesError) {
-        console.error(modulesError);
-        setLoading(false);
-        return;
-      }
-
-      const { data: progressData, error: progressError } = await supabase
-        .from("training_progress")
-        .select("*")
-        .eq("user_id", user.id);
-
-      if (progressError) console.error(progressError);
-
-      const merged = (modulesData || []).map((mod) => {
-        const progress = (progressData || []).find((p) => p.module_id === mod.id);
-        return { ...mod, progress: progress || null };
-      });
-
-      setModules(merged);
-      setLoading(false);
     };
 
     loadModules();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const handleLogout = async () => {
@@ -87,15 +102,31 @@ export default function TrainingPage() {
     return "bg-yellow-100 text-yellow-900 ring-yellow-300";
   };
 
-  const completed = modules.filter((m) => m.progress?.status === "Passed").length;
-  const attempted = modules.filter((m) => m.progress?.quiz_attempted).length;
-  const average = attempted
-    ? Math.round(modules.reduce((sum, m) => sum + (m.progress?.marks || 0), 0) / attempted)
-    : 0;
-  const isAdmin = userEmail.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
+  const summary = useMemo(() => {
+    const completed = modules.filter((m) => m.progress?.status === "Passed").length;
+    const attemptedModules = modules.filter((m) => m.progress?.quiz_attempted);
+    const average = attemptedModules.length
+      ? Math.round(
+          attemptedModules.reduce(
+            (sum, m) => sum + Number(m.progress?.marks || 0),
+            0
+          ) / attemptedModules.length
+        )
+      : 0;
+
+    return { completed, average };
+  }, [modules]);
+
+  const normalizedRole = role.trim().toLowerCase();
+  const isAdminOrPartner =
+    normalizedRole.includes("admin") || normalizedRole.includes("partner");
 
   if (loading) {
-    return <div className="p-10"><p className="text-lg font-bold text-slate-900">Loading training modules...</p></div>;
+    return (
+      <div className="p-10">
+        <p className="text-lg font-bold text-slate-900">Loading training modules...</p>
+      </div>
+    );
   }
 
   return (
@@ -108,16 +139,28 @@ export default function TrainingPage() {
               Complete assigned onboarding modules, attempt quizzes and track your learning progress.
             </p>
           </div>
+
           <div className="flex flex-wrap gap-3">
-            {isAdmin && (
-              <button onClick={() => router.push("/admin")} className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800">
+            {isAdminOrPartner && (
+              <button
+                onClick={() => router.push("/admin")}
+                className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800"
+              >
                 Admin Panel
               </button>
             )}
-            <button onClick={() => router.push("/dashboard")} className="rounded-xl bg-indigo-700 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-800">
+
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="rounded-xl bg-indigo-700 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-800"
+            >
               Back to Office Portal
             </button>
-            <button onClick={handleLogout} className="rounded-xl bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-800">
+
+            <button
+              onClick={handleLogout}
+              className="rounded-xl bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-800"
+            >
               Logout
             </button>
           </div>
@@ -125,8 +168,8 @@ export default function TrainingPage() {
 
         <div className="grid gap-4 md:grid-cols-3">
           <SummaryCard title="Total Modules" value={modules.length} />
-          <SummaryCard title="Completed" value={completed} />
-          <SummaryCard title="Average Score" value={`${average}%`} />
+          <SummaryCard title="Completed" value={summary.completed} />
+          <SummaryCard title="Average Score" value={`${summary.average}%`} />
         </div>
 
         {modules.length === 0 ? (
@@ -136,14 +179,22 @@ export default function TrainingPage() {
         ) : (
           <div className="grid gap-5 md:grid-cols-2">
             {modules.map((mod) => (
-              <div key={mod.id} className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-300">
+              <div
+                key={mod.id}
+                className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-300"
+              >
                 <h2 className="text-xl font-bold text-slate-950">{mod.title}</h2>
                 <p className="mt-2 text-slate-700">{mod.description}</p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <span className={`rounded-full px-3 py-1 text-sm font-bold ring-1 ${getStatusStyle(mod.progress?.status)}`}>
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-bold ring-1 ${getStatusStyle(
+                      mod.progress?.status
+                    )}`}
+                  >
                     {mod.progress?.status || "Not Started"}
                   </span>
+
                   {mod.progress?.quiz_attempted && (
                     <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-900 ring-1 ring-blue-300">
                       Marks: {mod.progress.marks}%
@@ -151,7 +202,10 @@ export default function TrainingPage() {
                   )}
                 </div>
 
-                <button onClick={() => router.push(`/training/${mod.id}`)} className="mt-5 rounded-xl bg-blue-700 px-5 py-2 font-bold text-white hover:bg-blue-800">
+                <button
+                  onClick={() => router.push(`/training/${mod.id}`)}
+                  className="mt-5 rounded-xl bg-blue-700 px-5 py-2 font-bold text-white hover:bg-blue-800"
+                >
                   {mod.progress?.status === "Passed" ? "Review Module" : "Start Module"}
                 </button>
               </div>

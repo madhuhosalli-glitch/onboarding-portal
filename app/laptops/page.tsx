@@ -1,5 +1,6 @@
 "use client";
 
+import PortalShell from "../../components/PortalShell";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
@@ -71,7 +72,7 @@ export default function LaptopUserPage() {
       const { data } = await supabase.auth.getUser();
 
       if (!data.user) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -128,7 +129,7 @@ export default function LaptopUserPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -137,7 +138,7 @@ export default function LaptopUserPage() {
               <p className="mt-2 text-slate-700">View your assigned laptop and raise support complaints.</p>
             </div>
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
               className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800"
             >
               Back to Dashboard

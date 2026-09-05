@@ -1,5 +1,6 @@
 "use client";
 
+import PortalShell from "../../components/PortalShell";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
@@ -21,7 +22,7 @@ export default function SOPLibraryPage() {
       const { data: userData } = await supabase.auth.getUser();
 
       if (!userData.user) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -105,7 +106,7 @@ export default function SOPLibraryPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   const formatSopContent = (content: string) => {
@@ -125,7 +126,7 @@ export default function SOPLibraryPage() {
     const lines = formatSopContent(selectedSop.sop_content || "");
 
     return (
-      <div className="min-h-screen bg-slate-100 p-6">
+      <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
         <div className="mx-auto max-w-6xl space-y-6">
           <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -155,7 +156,7 @@ export default function SOPLibraryPage() {
                 </button>
 
                 <button
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
                   className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white"
                 >
                   Dashboard
@@ -265,7 +266,7 @@ export default function SOPLibraryPage() {
     totalSops > 0 ? Math.round((readCount / totalSops) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -283,7 +284,7 @@ export default function SOPLibraryPage() {
 
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => router.push("/dashboard")}
+                onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
                 className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
               >
                 Dashboard

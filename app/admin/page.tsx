@@ -1,805 +1,176 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import PortalShell from "../../components/PortalShell";
 
 export default function AdminPage() {
   const router = useRouter();
-
   const [profile, setProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
-
-  const [sopCategories, setSopCategories] = useState<any[]>([]);
-  const [sops, setSops] = useState<any[]>([]);
-  const [sopReadStatus, setSopReadStatus] = useState<any[]>([]);
-
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"training" | "sops">("training");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadAdmin = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (!userData.user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: myProfile } = await supabase
-        .from("employee_profiles")
-        .select("*")
-        .eq("user_id", userData.user.id)
-        .single();
-
-      const role = (myProfile?.role || "").toLowerCase();
-
-      if (!role.includes("admin") && !role.includes("partner")) {
-        router.push("/dashboard");
-        return;
-      }
-
-      setProfile(myProfile);
-
-      const { data: allProfiles } = await supabase
-        .from("employee_profiles")
-        .select("*")
-        .order("full_name", { ascending: true });
-
-      const { data: allModules } = await supabase
-        .from("training_modules")
-        .select("*")
-        .order("display_order", { ascending: true });
-
-      const { data: allProgress } = await supabase
-        .from("training_progress")
-        .select("*");
-
-      const { data: allSopCategories } = await supabase
-        .from("sop_categories")
-        .select("*")
-        .order("display_order", { ascending: true });
-
-      const { data: allSops } = await supabase
-        .from("sops")
-        .select("*")
-        .eq("active", true)
-        .order("display_order", { ascending: true });
-
-      const { data: allSopReadStatus } = await supabase
-        .from("sop_read_status")
-        .select("*");
-
-      setProfiles(allProfiles || []);
-      setModules(allModules || []);
-      setProgress(allProgress || []);
-      setSopCategories(allSopCategories || []);
-      setSops(allSops || []);
-      setSopReadStatus(allSopReadStatus || []);
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) { router.push("/login"); return; }
+      const { data: mp } = await supabase.from("employee_profiles").select("*").eq("user_id", u.user.id).single();
+      const role = (mp?.role || "").toLowerCase();
+      if (!role.includes("admin") && !role.includes("partner")) { router.push("/dashboard"); return; }
+      setProfile(mp);
+      const [pr, mr, pgr] = await Promise.all([
+        supabase.from("employee_profiles").select("*").order("full_name", { ascending: true }),
+        supabase.from("training_modules").select("*").order("display_order", { ascending: true }),
+        supabase.from("training_progress").select("*"),
+      ]);
+      setProfiles(pr.data || []); setModules(mr.data || []); setProgress(pgr.data || []);
       setLoading(false);
-    };
-
-    loadAdmin();
+    })();
   }, [router]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+  const reportUsers = profiles.filter(p => { const r = (p.role || "").toLowerCase(); return r.includes("article") || r.includes("employee"); });
+  const getSummary = (uid: string) => {
+    const up = progress.filter(p => p.user_id === uid);
+    const videos = up.filter(p => p.watched).length;
+    const quizzes = up.filter(p => p.quiz_attempted).length;
+    const passed = up.filter(p => p.status === "Passed").length;
+    const marks = up.filter(p => p.quiz_attempted).map(p => Number(p.marks || 0));
+    const avg = marks.length ? Math.round(marks.reduce((a, b) => a + b, 0) / marks.length) : 0;
+    const pct = modules.length ? Math.round((passed / modules.length) * 100) : 0;
+    const status = pct === 100 ? "Completed" : passed > 0 || videos > 0 ? "In Progress" : "Not Started";
+    return { videos, quizzes, passed, avg, pct, status };
   };
+  const getModProg = (uid: string, mid: string) => progress.find(p => p.user_id === uid && p.module_id === mid);
+  const completed = reportUsers.filter(p => getSummary(p.user_id).status === "Completed").length;
+  const inProg = reportUsers.filter(p => getSummary(p.user_id).status === "In Progress").length;
+  const notStarted = reportUsers.filter(p => getSummary(p.user_id).status === "Not Started").length;
 
-  const reportUsers = profiles.filter((p) => {
-    const role = (p.role || "").toLowerCase();
-    return role.includes("article") || role.includes("employee");
-  });
+  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
 
-  const activeEmployees = profiles.filter((p) => p.active_for_assignment !== false);
-  const pastEmployees = profiles.filter((p) => p.active_for_assignment === false);
+  const TH = ({ c }: { c: React.ReactNode }) => (
+    <th style={{ padding: "0.6rem 1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)", background: "#f7f9f5", whiteSpace: "nowrap" }}>{c}</th>
+  );
+  const TD = ({ c, s }: { c: React.ReactNode; s?: React.CSSProperties }) => (
+    <td style={{ padding: "0.65rem 1rem", fontSize: "0.845rem", ...s }}>{c}</td>
+  );
 
-  const getTrainingProgress = (userId: string, moduleId: string) => {
-    return progress.find(
-      (p) => p.user_id === userId && p.module_id === moduleId
-    );
-  };
-
-  const getUserTrainingProgress = (userId: string) => {
-    return progress.filter((p) => p.user_id === userId);
-  };
-
-  const getTrainingSummary = (person: any) => {
-    const userProgress = getUserTrainingProgress(person.user_id);
-
-    const totalModules = modules.length;
-    const videosCompleted = userProgress.filter((p) => p.watched).length;
-    const quizzesAttempted = userProgress.filter((p) => p.quiz_attempted).length;
-    const passed = userProgress.filter((p) => p.status === "Passed").length;
-
-    const marksArray = userProgress
-      .filter((p) => p.quiz_attempted)
-      .map((p) => Number(p.marks || 0));
-
-    const avgMarks =
-      marksArray.length > 0
-        ? Math.round(marksArray.reduce((a, b) => a + b, 0) / marksArray.length)
-        : 0;
-
-    const overallPercent =
-      totalModules > 0 ? Math.round((passed / totalModules) * 100) : 0;
-
-    let status = "Not Started";
-
-    if (overallPercent === 100) status = "Completed";
-    else if (videosCompleted > 0 || quizzesAttempted > 0) status = "In Progress";
-
-    return {
-      totalModules,
-      videosCompleted,
-      quizzesAttempted,
-      passed,
-      avgMarks,
-      overallPercent,
-      status,
-    };
-  };
-
-  const isSopRead = (userId: string, sopId: string) => {
-    return sopReadStatus.some((r) => r.user_id === userId && r.sop_id === sopId);
-  };
-
-  const getSopReadItem = (userId: string, sopId: string) => {
-    return sopReadStatus.find((r) => r.user_id === userId && r.sop_id === sopId);
-  };
-
-  const getSopSummary = (person: any) => {
-    const readCount = sopReadStatus.filter((r) => r.user_id === person.user_id).length;
-    const totalSops = sops.length;
-    const completionPercent =
-      totalSops > 0 ? Math.round((readCount / totalSops) * 100) : 0;
-
-    let status = "Not Started";
-
-    if (completionPercent === 100) status = "Completed";
-    else if (readCount > 0) status = "In Progress";
-
-    return {
-      readCount,
-      totalSops,
-      completionPercent,
-      status,
-    };
-  };
-
-  const totalUsers = reportUsers.length;
-
-  const trainingCompletedUsers = reportUsers.filter(
-    (p) => getTrainingSummary(p).overallPercent === 100
-  ).length;
-
-  const trainingInProgressUsers = reportUsers.filter(
-    (p) => getTrainingSummary(p).status === "In Progress"
-  ).length;
-
-  const trainingNotStartedUsers = reportUsers.filter(
-    (p) => getTrainingSummary(p).status === "Not Started"
-  ).length;
-
-  const sopCompletedUsers = reportUsers.filter(
-    (p) => getSopSummary(p).completionPercent === 100
-  ).length;
-
-  const sopInProgressUsers = reportUsers.filter(
-    (p) => getSopSummary(p).status === "In Progress"
-  ).length;
-
-  const sopNotStartedUsers = reportUsers.filter(
-    (p) => getSopSummary(p).status === "Not Started"
-  ).length;
-
-  if (loading) {
+  if (selectedUser) {
+    const s = getSummary(selectedUser.user_id);
     return (
-      <div className="p-10 text-xl font-bold text-slate-900">
-        Loading Admin Dashboard...
-      </div>
-    );
-  }
-
-  if (selectedUser && activeTab === "training") {
-    const summary = getTrainingSummary(selectedUser);
-
-    return (
-      <div className="min-h-screen bg-slate-100 p-6">
-        <div className="mx-auto max-w-7xl space-y-6">
-          <Header
-            title={selectedUser.full_name || "User"}
-            subtitle="Module-wise Training Report"
-            detail={`Role: ${selectedUser.role || "-"} | Overall Completion: ${summary.overallPercent}%`}
-            onBack={() => setSelectedUser(null)}
-            onDashboard={() => router.push("/dashboard")}
-            onLogout={handleLogout}
-          />
-
-          <div className="grid gap-4 md:grid-cols-4">
-            <SummaryCard title="Video Completed" value={`${summary.videosCompleted}/${modules.length}`} color="bg-green-700" />
-            <SummaryCard title="Quiz Attempted" value={`${summary.quizzesAttempted}/${modules.length}`} color="bg-blue-700" />
-            <SummaryCard title="Passed Modules" value={`${summary.passed}/${modules.length}`} color="bg-purple-700" />
-            <SummaryCard title="Average Marks" value={`${summary.avgMarks}%`} color="bg-slate-900" />
+      <PortalShell isAdminOrPartner profileName={profile?.full_name} pageTitle="Training Report">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          <button className="btn btn-o btn-sm" onClick={() => setSelectedUser(null)}>← Back</button>
+          <div>
+            <span style={{ fontWeight: 800, color: "var(--forest)", fontSize: "1rem" }}>{selectedUser.full_name}</span>
+            <span style={{ color: "var(--muted)", fontSize: "0.82rem", marginLeft: "0.5rem" }}>· {selectedUser.role}</span>
           </div>
-
-          <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-            <h2 className="mb-6 text-3xl font-bold text-slate-950">
-              Module-wise Details
-            </h2>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full border border-slate-300 text-sm">
-                <thead>
-                  <tr className="bg-slate-900 text-left text-white">
-                    <th className="px-4 py-3">Module</th>
-                    <th className="px-4 py-3">Video</th>
-                    <th className="px-4 py-3">Quiz</th>
-                    <th className="px-4 py-3">Marks</th>
-                    <th className="px-4 py-3">Status</th>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+          {[["Videos Done", `${s.videos}/${modules.length}`], ["Quizzes", `${s.quizzes}/${modules.length}`], ["Passed", `${s.passed}/${modules.length}`], ["Avg Marks", `${s.avg}%`]].map(([l, v]) => (
+            <div key={l} className="sc"><div className="sv">{v}</div><div className="sl">{l}</div></div>
+          ))}
+        </div>
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Module-wise Breakdown</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["Module", "Video", "Quiz", "Marks", "Status"].map(h => <TH key={h} c={h} />)}</tr></thead>
+            <tbody>
+              {modules.map((m, i) => {
+                const p = getModProg(selectedUser.user_id, m.id);
+                return (
+                  <tr key={m.id} style={{ borderBottom: i < modules.length - 1 ? "1px solid var(--border)" : "none", background: i % 2 === 0 ? "#fff" : "#fafaf8" }}>
+                    <TD c={<><span style={{ color: "var(--muted)", marginRight: 6, fontSize: "0.78rem" }}>{m.display_order}.</span><span style={{ fontWeight: 600 }}>{m.title}</span></>} />
+                    <TD c={<span className={`badge ${p?.watched ? "bg" : "by"}`}>{p?.watched ? "Done" : "Pending"}</span>} />
+                    <TD c={<span className={`badge ${p?.quiz_attempted ? "bg" : "by"}`}>{p?.quiz_attempted ? "Done" : "Pending"}</span>} />
+                    <TD c={<span style={{ fontWeight: 700, color: (p?.marks || 0) >= 70 ? "var(--forest)" : "var(--muted)" }}>{p?.marks || 0}%</span>} />
+                    <TD c={<span className={`badge ${p?.status === "Passed" ? "bg" : p?.status === "Failed" ? "br" : "by"}`}>{p?.status || "Not Started"}</span>} />
                   </tr>
-                </thead>
-
-                <tbody>
-                  {modules.map((module) => {
-                    const item = getTrainingProgress(selectedUser.user_id, module.id);
-
-                    return (
-                      <tr key={module.id} className="border-b border-slate-200 bg-white text-slate-900">
-                        <td className="px-4 py-3 font-bold">
-                          {module.display_order}. {module.title}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <Badge
-                            text={item?.watched ? "Completed" : "Pending"}
-                            color={item?.watched ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}
-                          />
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <Badge
-                            text={item?.quiz_attempted ? "Attempted" : "Pending"}
-                            color={item?.quiz_attempted ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-800"}
-                          />
-                        </td>
-
-                        <td className="px-4 py-3 font-bold text-blue-700">
-                          {item?.marks || 0}%
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <Badge
-                            text={item?.status || "Not Started"}
-                            color={
-                              item?.status === "Passed"
-                                ? "bg-green-100 text-green-800"
-                                : item?.status === "Failed"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-slate-200 text-slate-800"
-                            }
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
-    );
-  }
-
-  if (selectedUser && activeTab === "sops") {
-    const summary = getSopSummary(selectedUser);
-
-    return (
-      <div className="min-h-screen bg-slate-100 p-6">
-        <div className="mx-auto max-w-7xl space-y-6">
-          <Header
-            title={selectedUser.full_name || "User"}
-            subtitle="SOP-wise Reading Report"
-            detail={`Role: ${selectedUser.role || "-"} | SOP Completion: ${summary.completionPercent}%`}
-            onBack={() => setSelectedUser(null)}
-            onDashboard={() => router.push("/dashboard")}
-            onLogout={handleLogout}
-          />
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <SummaryCard title="SOPs Read" value={`${summary.readCount}/${sops.length}`} color="bg-green-700" />
-            <SummaryCard title="Completion" value={`${summary.completionPercent}%`} color="bg-indigo-700" />
-            <SummaryCard title="Status" value={summary.status} color="bg-slate-900" />
-          </div>
-
-          {sopCategories.map((category) => {
-            const categorySops = sops.filter((s) => s.category_id === category.id);
-            const categoryRead = categorySops.filter((s) =>
-              isSopRead(selectedUser.user_id, s.id)
-            ).length;
-
-            const categoryPercent =
-              categorySops.length > 0
-                ? Math.round((categoryRead / categorySops.length) * 100)
-                : 0;
-
-            return (
-              <div key={category.id} className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-3xl font-bold text-slate-950">
-                      {category.name}
-                    </h2>
-                    <p className="mt-1 text-sm font-semibold text-slate-600">
-                      {categoryRead}/{categorySops.length} SOPs read
-                    </p>
-                  </div>
-
-                  <ProgressBar percent={categoryPercent} />
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border border-slate-300 text-sm">
-                    <thead>
-                      <tr className="bg-slate-900 text-left text-white">
-                        <th className="px-4 py-3">SOP</th>
-                        <th className="px-4 py-3">Description</th>
-                        <th className="px-4 py-3">Read Status</th>
-                        <th className="px-4 py-3">Read Date</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {categorySops.map((sop) => {
-                        const readItem = getSopReadItem(selectedUser.user_id, sop.id);
-
-                        return (
-                          <tr key={sop.id} className="border-b border-slate-200 bg-white text-slate-900">
-                            <td className="px-4 py-3 font-bold">
-                              {sop.display_order}. {sop.title}
-                            </td>
-
-                            <td className="px-4 py-3 text-slate-700">
-                              {sop.description || "-"}
-                            </td>
-
-                            <td className="px-4 py-3">
-                              <Badge
-                                text={readItem ? "Read" : "Pending"}
-                                color={readItem ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}
-                              />
-                            </td>
-
-                            <td className="px-4 py-3 font-semibold text-slate-700">
-                              {readItem?.read_at
-                                ? new Date(readItem.read_at).toLocaleString()
-                                : "-"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </PortalShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-3xl bg-gradient-to-r from-purple-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+    <PortalShell isAdminOrPartner profileName={profile?.full_name} pageTitle="Reports & Admin">
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--forest)", marginBottom: 4 }}>Admin Dashboard</h1>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Training reports, employee management and system controls.</p>
+      </div>
+
+      {/* Quick nav */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        {[
+          { label: "Employee Management", icon: "👥", sub: `${profiles.length} total employees`, href: "/admin/employees" },
+          { label: "Laptop Management",   icon: "💻", sub: "Assignments & complaints",            href: "/admin/laptops" },
+          { label: "SOP Compliance",      icon: "✅", sub: "Checklists & tracking",               href: "/admin/sop-compliance" },
+        ].map(l => (
+          <button key={l.href} onClick={() => router.push(l.href)} className="card" style={{ padding: "1.1rem 1.25rem", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.85rem", transition: "border-color 0.13s", border: "1px solid var(--border)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--forest)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 8, background: "var(--forest)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", flexShrink: 0 }}>{l.icon}</div>
             <div>
-              <h1 className="text-4xl font-extrabold">
-                Admin Dashboard
-              </h1>
-              <p className="mt-2 text-purple-100">
-                Welcome, {profile?.full_name || "Admin / Partner"}
-              </p>
-              <p className="mt-2 text-sm text-purple-200">
-                Manage employee records, training, SOPs, laptops and internal systems.
-              </p>
+              <div style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text)" }}>{l.label}</div>
+              <div style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 2 }}>{l.sub}</div>
             </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => router.push("/dashboard")}
-                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100"
-              >
-                ← Back to Main Portal
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
-          <SummaryCard title="Active Employees" value={activeEmployees.length} color="bg-green-700" />
-          <SummaryCard title="Past Employees" value={pastEmployees.length} color="bg-purple-700" />
-          <SummaryCard title="Training Completed" value={trainingCompletedUsers} color="bg-blue-700" />
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-3">
-          <NavigationCard
-            title="Employee Management"
-            description="Manage active employees, past employees and employee database."
-            button="Open Employees"
-            color="from-emerald-700 to-slate-900"
-            onClick={() => router.push("/admin/employees")}
-          />
-
-          <NavigationCard
-            title="Laptop Management"
-            description="Manage laptops, assignments, transfers and complaints."
-            button="Open Laptops"
-            color="from-cyan-700 to-slate-900"
-            onClick={() => router.push("/admin/laptops")}
-          />
-          <NavigationCard
-            title="SOP Compliance"
-            description="Assign SOPs to administrators, complete compliance checklists, review exceptions and monitor adherence."
-            button="Open SOP Compliance"
-            color="from-indigo-700 to-slate-900"
-            onClick={() => router.push("/admin/sop-compliance")}
-          />
-
-          <NavigationCard
-            title="Main Dashboard"
-            description="Go back to your personal dashboard and portal shortcuts."
-            button="Open Dashboard"
-            color="from-blue-700 to-slate-900"
-            onClick={() => router.push("/dashboard")}
-          />
-        </div>
-
-        <div className="rounded-3xl bg-white p-4 shadow-xl ring-1 ring-slate-200">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => {
-                setActiveTab("training");
-                setSelectedUser(null);
-              }}
-              className={`rounded-2xl px-6 py-3 text-sm font-bold ${
-                activeTab === "training"
-                  ? "bg-blue-700 text-white"
-                  : "bg-slate-100 text-slate-800"
-              }`}
-            >
-              Training Dashboard
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("sops");
-                setSelectedUser(null);
-              }}
-              className={`rounded-2xl px-6 py-3 text-sm font-bold ${
-                activeTab === "sops"
-                  ? "bg-indigo-700 text-white"
-                  : "bg-slate-100 text-slate-800"
-              }`}
-            >
-              SOP Dashboard
-            </button>
-          </div>
-        </div>
-
-        {activeTab === "training" ? (
-          <>
-            <div className="grid gap-4 md:grid-cols-4">
-              <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
-              <SummaryCard title="Completed" value={trainingCompletedUsers} color="bg-green-700" />
-              <SummaryCard title="In Progress" value={trainingInProgressUsers} color="bg-blue-700" />
-              <SummaryCard title="Not Started" value={trainingNotStartedUsers} color="bg-yellow-600" />
-            </div>
-
-            <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-              <h2 className="mb-6 text-3xl font-bold text-slate-950">
-                User-wise Training Summary
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-slate-300 text-sm">
-                  <thead>
-                    <tr className="bg-slate-900 text-left text-white">
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Role</th>
-                      <th className="px-4 py-3">Videos</th>
-                      <th className="px-4 py-3">Quizzes</th>
-                      <th className="px-4 py-3">Avg Marks</th>
-                      <th className="px-4 py-3">Overall %</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Action</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {reportUsers.map((person) => {
-                      const summary = getTrainingSummary(person);
-
-                      return (
-                        <tr key={person.user_id} className="border-b border-slate-200 bg-white text-slate-900">
-                          <td className="px-4 py-3 font-bold">
-                            {person.full_name || "-"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <Badge text={person.role || "-"} color="bg-slate-200 text-slate-800" />
-                          </td>
-
-                          <td className="px-4 py-3 font-bold text-green-700">
-                            {summary.videosCompleted}/{modules.length}
-                          </td>
-
-                          <td className="px-4 py-3 font-bold text-blue-700">
-                            {summary.quizzesAttempted}/{modules.length}
-                          </td>
-
-                          <td className="px-4 py-3 font-bold text-indigo-700">
-                            {summary.avgMarks}%
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <ProgressBar percent={summary.overallPercent} />
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <Badge
-                              text={summary.status}
-                              color={
-                                summary.status === "Completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : summary.status === "In Progress"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }
-                            />
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => setSelectedUser(person)}
-                              className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
-                            >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="grid gap-4 md:grid-cols-4">
-              <SummaryCard title="Total Users" value={totalUsers} color="bg-slate-900" />
-              <SummaryCard title="Completed" value={sopCompletedUsers} color="bg-green-700" />
-              <SummaryCard title="In Progress" value={sopInProgressUsers} color="bg-indigo-700" />
-              <SummaryCard title="Not Started" value={sopNotStartedUsers} color="bg-yellow-600" />
-            </div>
-
-            <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-              <h2 className="mb-6 text-3xl font-bold text-slate-950">
-                User-wise SOP Reading Summary
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-slate-300 text-sm">
-                  <thead>
-                    <tr className="bg-slate-900 text-left text-white">
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Role</th>
-                      <th className="px-4 py-3">SOPs Read</th>
-                      <th className="px-4 py-3">Total SOPs</th>
-                      <th className="px-4 py-3">Completion %</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Action</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {reportUsers.map((person) => {
-                      const summary = getSopSummary(person);
-
-                      return (
-                        <tr key={person.user_id} className="border-b border-slate-200 bg-white text-slate-900">
-                          <td className="px-4 py-3 font-bold">
-                            {person.full_name || "-"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <Badge text={person.role || "-"} color="bg-slate-200 text-slate-800" />
-                          </td>
-
-                          <td className="px-4 py-3 font-bold text-green-700">
-                            {summary.readCount}
-                          </td>
-
-                          <td className="px-4 py-3 font-bold text-slate-800">
-                            {summary.totalSops}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <ProgressBar percent={summary.completionPercent} />
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <Badge
-                              text={summary.status}
-                              color={
-                                summary.status === "Completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : summary.status === "In Progress"
-                                  ? "bg-indigo-100 text-indigo-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }
-                            />
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => setSelectedUser(person)}
-                              className="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800"
-                            >
-                              View SOP Details
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function NavigationCard({
-  title,
-  description,
-  button,
-  color,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  button: string;
-  color: string;
-  onClick: () => void;
-}) {
-  return (
-    <div className={`rounded-3xl bg-gradient-to-br ${color} p-6 text-white shadow-xl`}>
-      <h2 className="text-2xl font-extrabold">{title}</h2>
-      <p className="mt-2 min-h-12 text-sm text-white/80">{description}</p>
-      <button
-        onClick={onClick}
-        className="mt-5 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-900 hover:bg-slate-100"
-      >
-        {button}
-      </button>
-    </div>
-  );
-}
-
-function Header({
-  title,
-  subtitle,
-  detail,
-  onBack,
-  onDashboard,
-  onLogout,
-}: {
-  title: string;
-  subtitle: string;
-  detail: string;
-  onBack: () => void;
-  onDashboard: () => void;
-  onLogout: () => void;
-}) {
-  return (
-    <div className="rounded-3xl bg-gradient-to-r from-purple-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
-      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-4xl font-extrabold">{title}</h1>
-          <p className="mt-2 text-purple-100">{subtitle}</p>
-          <p className="mt-2 text-sm text-purple-200">{detail}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={onBack}
-            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-          >
-            ← Back
           </button>
-
-          <button
-            onClick={onDashboard}
-            className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white"
-          >
-            Dashboard
-          </button>
-
-          <button
-            onClick={onLogout}
-            className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value: string | number;
-  color: string;
-}) {
-  return (
-    <div className={`${color} rounded-2xl p-5 text-white shadow-lg`}>
-      <p className="text-sm font-bold text-white/80">{title}</p>
-      <p className="mt-2 text-4xl font-extrabold">{value}</p>
-    </div>
-  );
-}
-
-function Badge({ text, color }: { text: string; color: string }) {
-  return (
-    <span className={`rounded-full px-3 py-1 text-xs font-bold ${color}`}>
-      {text}
-    </span>
-  );
-}
-
-function ProgressBar({ percent }: { percent: number }) {
-  return (
-    <div>
-      <div className="h-3 w-32 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className={`h-full rounded-full ${
-            percent === 100
-              ? "bg-green-600"
-              : percent > 0
-              ? "bg-indigo-600"
-              : "bg-yellow-500"
-          }`}
-          style={{ width: `${percent}%` }}
-        />
+        ))}
       </div>
 
-      <p className="mt-1 text-xs font-bold text-slate-700">
-        {percent}%
-      </p>
-    </div>
+      {/* Training stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        <div className="sc"><div className="sv">{reportUsers.length}</div><div className="sl">Total Users</div></div>
+        <div className="sc"><div className="sv">{completed}</div><div className="sl">Completed</div></div>
+        <div className="sc"><div className="sv">{inProg}</div><div className="sl">In Progress</div></div>
+        <div className="sc"><div className="sv">{notStarted}</div><div className="sl">Not Started</div></div>
+      </div>
+
+      {/* Training summary table */}
+      <div className="card" style={{ overflow: "hidden" }}>
+        <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+          <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>User-wise Training Summary</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>{["Name", "Role", "Videos", "Quizzes", "Avg Marks", "Overall %", "Status", "Action"].map(h => <TH key={h} c={h} />)}</tr>
+            </thead>
+            <tbody>
+              {reportUsers.map((p, i) => {
+                const s = getSummary(p.user_id);
+                return (
+                  <tr key={p.user_id} style={{ borderBottom: i < reportUsers.length - 1 ? "1px solid var(--border)" : "none", background: i % 2 === 0 ? "#fff" : "#fafaf8" }}>
+                    <TD c={<span style={{ fontWeight: 700 }}>{p.full_name || "—"}</span>} />
+                    <TD c={<span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{p.role}</span>} />
+                    <TD c={<span style={{ fontWeight: 600, color: "var(--forest)" }}>{s.videos}/{modules.length}</span>} />
+                    <TD c={<span style={{ fontWeight: 600, color: "var(--forest)" }}>{s.quizzes}/{modules.length}</span>} />
+                    <TD c={<span style={{ fontWeight: 700, color: s.avg >= 70 ? "var(--forest)" : "var(--muted)" }}>{s.avg}%</span>} />
+                    <TD c={
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div style={{ width: 80, height: 6, background: "#e8ede8", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", background: s.pct === 100 ? "#16a34a" : s.pct > 0 ? "var(--forest)" : "#e8ede8", width: `${s.pct}%` }} />
+                        </div>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--forest)", minWidth: 32 }}>{s.pct}%</span>
+                      </div>
+                    } />
+                    <TD c={<span className={`badge ${s.status === "Completed" ? "bg" : s.status === "In Progress" ? "bb" : "by"}`}>{s.status}</span>} />
+                    <TD c={<button className="btn btn-p btn-sm" onClick={() => setSelectedUser(p)}>Details</button>} />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </PortalShell>
   );
 }

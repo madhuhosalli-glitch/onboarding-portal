@@ -1,238 +1,131 @@
 "use client";
-
-import PortalShell from "../../components/PortalShell";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import PortalShell from "../../components/PortalShell";
 
 export default function ProfilePage() {
   const router = useRouter();
-
   const [profile, setProfile] = useState<any>(null);
   const [progress, setProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (!userData.user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("employee_profiles")
-        .select("*")
-        .eq("user_id", userData.user.id)
-        .single();
-
-      setProfile(profileData);
-
-      const { data: progressData } = await supabase
-        .from("training_progress")
-        .select(`
-          *,
-          training_modules (
-            title,
-            display_order
-          )
-        `)
-        .eq("user_id", userData.user.id);
-
-      setProgress(progressData || []);
-      setLoading(false);
-    };
-
-    loadProfile();
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) { router.replace("/login"); return; }
+      const [pr, pgr] = await Promise.all([
+        supabase.from("employee_profiles").select("*").eq("user_id", u.user.id).single(),
+        supabase.from("training_progress").select(`*, training_modules(title, display_order)`).eq("user_id", u.user.id),
+      ]);
+      setProfile(pr.data); setProgress(pgr.data || []); setLoading(false);
+    })();
   }, [router]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  };
+  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
 
-  if (loading) {
-    return <div className="p-10 text-xl font-bold">Loading...</div>;
-  }
+  const role = (profile?.role || "").toLowerCase();
+  const isAdminOrPartner = role.includes("admin") || role.includes("partner");
+  const isArticle = role.includes("article");
+
+  const fields = [
+    ["Full Name",       profile?.full_name],
+    ["Official Email",  profile?.official_email || profile?.email],
+    ["Personal Email",  profile?.personal_email],
+    ["Mobile Number",   profile?.mobile_number],
+    ["Role",            profile?.role],
+    ["Designation",     profile?.designation],
+  ].filter(([, v]) => v);
+
+  const articleFields = [
+    ["SRO Number",        profile?.sro_number],
+    ["Foundation Marks",  profile?.foundation_marks],
+    ["IPCC Group 1",      profile?.ipcc_group1_marks],
+    ["IPCC Group 2",      profile?.ipcc_group2_marks],
+  ].filter(([, v]) => v);
+
+  const sortedProgress = [...progress].sort((a, b) => (a.training_modules?.display_order || 0) - (b.training_modules?.display_order || 0));
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="rounded-3xl bg-gradient-to-r from-blue-900 to-slate-900 p-8 text-white shadow-2xl">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-extrabold">
-                {profile?.full_name || "Profile"}
-              </h1>
-              <p className="mt-2 text-blue-100">
-                Role: {profile?.role || "-"}
-              </p>
-            </div>
+    <PortalShell isAdminOrPartner={isAdminOrPartner} profileName={profile?.full_name} pageTitle="Profile">
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--forest)", marginBottom: 4 }}>My Profile</h1>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Your personal details and training progress.</p>
+      </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
-                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-              >
-                Dashboard
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
-              >
-                Logout
-              </button>
-            </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.25rem" }}>
+        {/* Personal Details */}
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Personal Details</span>
+          </div>
+          <div style={{ padding: "0.5rem 1.25rem" }}>
+            {fields.map(([k, v]) => (
+              <div key={k as string} style={{ display: "flex", justifyContent: "space-between", padding: "0.55rem 0", borderBottom: "1px solid var(--border)" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{k}</span>
+                <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text)", textAlign: "right", maxWidth: "58%" }}>{v}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-200">
-            <h2 className="mb-4 text-2xl font-bold text-slate-950">
-              Personal Details
-            </h2>
-
-            <div className="space-y-4 text-slate-900">
-              <div>
-                <p className="text-sm font-bold text-slate-500">Full Name</p>
-                <p className="text-lg font-semibold">{profile?.full_name || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">Official Email</p>
-                <p className="text-lg font-semibold">{profile?.official_email || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">Personal Email</p>
-                <p className="text-lg font-semibold">{profile?.personal_email || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">Mobile Number</p>
-                <p className="text-lg font-semibold">{profile?.mobile_number || "-"}</p>
-              </div>
-            </div>
+        {/* Academic details or role info */}
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>{isArticle ? "Academic Details" : "Access Details"}</span>
           </div>
-
-          <div className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-200">
-            <h2 className="mb-4 text-2xl font-bold text-slate-950">
-              Article / Academic Details
-            </h2>
-
-            <div className="space-y-4 text-slate-900">
-              <div>
-                <p className="text-sm font-bold text-slate-500">SRO Number</p>
-                <p className="text-lg font-semibold">{profile?.sro_number || "-"}</p>
+          <div style={{ padding: "0.5rem 1.25rem" }}>
+            {isArticle && articleFields.length > 0 ? (
+              articleFields.map(([k, v]) => (
+                <div key={k as string} style={{ display: "flex", justifyContent: "space-between", padding: "0.55rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>{k}</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text)" }}>{v}</span>
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: "1rem 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "0.55rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Access Level</span>
+                  <span className={`badge ${isAdminOrPartner ? "bb" : "bg"}`}>{isAdminOrPartner ? "Admin / Partner" : "Employee"}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "0.55rem 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Password Changed</span>
+                  <span className={`badge ${profile?.password_changed ? "bg" : "br"}`}>{profile?.password_changed ? "Yes" : "No"}</span>
+                </div>
               </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">Foundation Marks</p>
-                <p className="text-lg font-semibold">{profile?.foundation_marks || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">IPCC / Inter Group 1</p>
-                <p className="text-lg font-semibold">{profile?.ipcc_group1_marks || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-500">IPCC / Inter Group 2</p>
-                <p className="text-lg font-semibold">{profile?.ipcc_group2_marks || "-"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-          <h2 className="mb-6 text-3xl font-bold text-slate-950">
-            Training Progress
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full overflow-hidden rounded-2xl border border-slate-300">
-              <thead>
-                <tr className="bg-slate-900 text-left text-white">
-                  <th className="px-5 py-4">Module</th>
-                  <th className="px-5 py-4">Video</th>
-                  <th className="px-5 py-4">Quiz</th>
-                  <th className="px-5 py-4">Marks</th>
-                  <th className="px-5 py-4">Status</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {progress.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-5 py-5 text-center font-semibold text-slate-700"
-                    >
-                      No training progress available yet.
-                    </td>
-                  </tr>
-                ) : (
-                  progress.map((item, index) => (
-                    <tr
-                      key={index}
-                      className="border-b border-slate-200 bg-white text-slate-900"
-                    >
-                      <td className="px-5 py-4 font-bold text-slate-950">
-                        {item.training_modules?.display_order}.{" "}
-                        {item.training_modules?.title}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            item.watched
-                              ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {item.watched ? "Completed" : "Pending"}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            item.quiz_attempted
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-slate-200 text-slate-800"
-                          }`}
-                        >
-                          {item.quiz_attempted ? "Attempted" : "Locked"}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 font-bold text-blue-700">
-                        {item.marks || 0}%
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-bold ${
-                            item.status === "Passed"
-                              ? "bg-green-100 text-green-800"
-                              : item.status === "Failed"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-slate-200 text-slate-800"
-                          }`}
-                        >
-                          {item.status || "Not Started"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            )}
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Training Progress */}
+      {sortedProgress.length > 0 && (
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Training Progress</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.845rem" }}>
+            <thead>
+              <tr style={{ background: "#f7f9f5" }}>
+                {["Module", "Video", "Quiz", "Marks", "Status"].map(h => (
+                  <th key={h} style={{ padding: "0.65rem 1.1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedProgress.map((p, i) => (
+                <tr key={p.id} style={{ borderBottom: i < sortedProgress.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <td style={{ padding: "0.7rem 1.1rem", fontWeight: 600 }}>{p.training_modules?.display_order}. {p.training_modules?.title}</td>
+                  <td style={{ padding: "0.7rem 1.1rem" }}><span className={`badge ${p.watched ? "bg" : "by"}`}>{p.watched ? "Completed" : "Pending"}</span></td>
+                  <td style={{ padding: "0.7rem 1.1rem" }}><span className={`badge ${p.quiz_attempted ? "bg" : "by"}`}>{p.quiz_attempted ? "Attempted" : "Locked"}</span></td>
+                  <td style={{ padding: "0.7rem 1.1rem", fontWeight: 600, color: p.marks > 0 ? "var(--forest)" : "var(--muted)" }}>{p.marks !== null && p.marks !== undefined ? `${p.marks}%` : "—"}</td>
+                  <td style={{ padding: "0.7rem 1.1rem" }}><span className={`badge ${p.status === "Passed" ? "bg" : p.status === "Failed" ? "br" : "by"}`}>{p.status || "In Progress"}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </PortalShell>
   );
 }

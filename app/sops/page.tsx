@@ -1,13 +1,11 @@
 "use client";
-
-import PortalShell from "../../components/PortalShell";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import PortalShell from "../../components/PortalShell";
 
 export default function SOPLibraryPage() {
   const router = useRouter();
-
   const [profile, setProfile] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [sops, setSops] = useState<any[]>([]);
@@ -16,394 +14,124 @@ export default function SOPLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [canMarkRead, setCanMarkRead] = useState(false);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const loadSOPs = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-
-      if (!userData.user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("employee_profiles")
-        .select("*")
-        .eq("user_id", userData.user.id)
-        .single();
-
-      setProfile(profileData);
-
-      const { data: categoryData } = await supabase
-        .from("sop_categories")
-        .select("*")
-        .order("display_order", { ascending: true });
-
-      const { data: sopData } = await supabase
-        .from("sops")
-        .select("*")
-        .eq("active", true)
-        .order("display_order", { ascending: true });
-
-      const { data: readData } = await supabase
-        .from("sop_read_status")
-        .select("*")
-        .eq("user_id", userData.user.id);
-
-      setCategories(categoryData || []);
-      setSops(sopData || []);
-      setReadStatus(readData || []);
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) { router.push("/login"); return; }
+      const [pr, cr, sr, rsr] = await Promise.all([
+        supabase.from("employee_profiles").select("*").eq("user_id", u.user.id).single(),
+        supabase.from("sop_categories").select("*").order("display_order", { ascending: true }),
+        supabase.from("sops").select("*").eq("active", true).order("display_order", { ascending: true }),
+        supabase.from("sop_read_status").select("*").eq("user_id", u.user.id),
+      ]);
+      setProfile(pr.data); setCategories(cr.data || []); setSops(sr.data || []); setReadStatus(rsr.data || []);
       setLoading(false);
-    };
-
-    loadSOPs();
+    })();
   }, [router]);
 
-  useEffect(() => {
-    if (!selectedSop) return;
+  const isRead = (sopId: string) => readStatus.some(r => r.sop_id === sopId);
+  const totalRead = readStatus.length;
+  const role = (profile?.role || "").toLowerCase();
+  const isAdminOrPartner = role.includes("admin") || role.includes("partner");
 
-    setCanMarkRead(false);
-
-    const timer = setTimeout(() => {
-      setCanMarkRead(true);
-    }, 30000);
-
-    return () => clearTimeout(timer);
-  }, [selectedSop]);
-
-  const isRead = (sopId: string) => {
-    return readStatus.some((r) => r.sop_id === sopId);
+  const openSop = async (sop: any) => {
+    setSelectedSop(sop);
+    setCanMarkRead(!isRead(sop.id));
+    setMessage("");
   };
 
-  const markAsRead = async () => {
+  const markRead = async () => {
     if (!profile || !selectedSop) return;
-
-    const { error } = await supabase.from("sop_read_status").upsert(
-      {
-        user_id: profile.user_id,
-        sop_id: selectedSop.id,
-        read_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,sop_id" }
-    );
-
-    if (error) {
-      setMessage("Could not mark SOP as read: " + error.message);
-      return;
-    }
-
-    setReadStatus((prev) => [
-      ...prev.filter((r) => r.sop_id !== selectedSop.id),
-      {
-        user_id: profile.user_id,
-        sop_id: selectedSop.id,
-        read_at: new Date().toISOString(),
-      },
-    ]);
-
-    setMessage("SOP marked as read.");
+    const { error } = await supabase.from("sop_read_status").insert({ user_id: profile.user_id, sop_id: selectedSop.id, read_at: new Date().toISOString() });
+    if (!error) { setReadStatus(prev => [...prev, { sop_id: selectedSop.id }]); setCanMarkRead(false); setMessage("Marked as read."); }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  };
+  const filteredSops = sops.filter(s =>
+    !search || `${s.title} ${s.description || ""}`.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const formatSopContent = (content: string) => {
-    if (!content) return [];
-
-    return content
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-  };
-
-  if (loading) {
-    return <div className="p-10 text-xl font-bold">Loading SOP Library...</div>;
-  }
-
-  if (selectedSop) {
-    const lines = formatSopContent(selectedSop.sop_content || "");
-
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
-        <div className="mx-auto max-w-6xl space-y-6">
-          <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
-            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-4xl font-extrabold">
-                  {selectedSop.title}
-                </h1>
-
-                <p className="mt-2 text-indigo-100">
-                  {selectedSop.description}
-                </p>
-
-                <p className="mt-2 text-sm font-semibold text-indigo-200">
-                  Please read the SOP carefully. Mark as Read will be enabled after 30 seconds.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => {
-                    setSelectedSop(null);
-                    setMessage("");
-                  }}
-                  className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-                >
-                  ← Back to SOPs
-                </button>
-
-                <button
-                  onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
-                  className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-bold text-white"
-                >
-                  Dashboard
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-3xl font-bold text-slate-950">
-                  SOP Steps
-                </h2>
-
-                <p className="mt-1 text-sm font-semibold text-slate-600">
-                  Internal use only — B V C & Co., Chartered Accountants
-                </p>
-              </div>
-
-              <span
-                className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  isRead(selectedSop.id)
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {isRead(selectedSop.id) ? "Read" : "Pending"}
-              </span>
-            </div>
-
-            <div className="space-y-4">
-              {lines.length === 0 ? (
-                <div className="rounded-2xl bg-red-50 p-5 text-sm font-bold text-red-800 ring-1 ring-red-200">
-                  No SOP content has been added for this item.
-                </div>
-              ) : (
-                lines.map((line, index) => {
-                  const isHeading =
-                    !line.match(/^\d+\./) &&
-                    line === line.toUpperCase();
-
-                  if (isHeading) {
-                    return (
-                      <div
-                        key={index}
-                        className="mt-6 rounded-2xl bg-slate-900 px-5 py-3 text-lg font-extrabold text-white"
-                      >
-                        {line}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={index}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-base font-semibold leading-7 text-slate-900"
-                    >
-                      {line}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <button
-                onClick={markAsRead}
-                disabled={!canMarkRead || isRead(selectedSop.id)}
-                className={`rounded-2xl px-7 py-3 text-sm font-bold text-white ${
-                  isRead(selectedSop.id)
-                    ? "bg-green-700"
-                    : canMarkRead
-                    ? "bg-indigo-700 hover:bg-indigo-800"
-                    : "bg-slate-400"
-                }`}
-              >
-                {isRead(selectedSop.id)
-                  ? "Already Marked as Read"
-                  : canMarkRead
-                  ? "Mark as Read"
-                  : "Read for 30 seconds to enable"}
-              </button>
-
-              {message && (
-                <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-bold text-blue-900 ring-1 ring-blue-300">
-                  {message}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const totalSops = sops.length;
-  const readCount = readStatus.length;
-  const completion =
-    totalSops > 0 ? Math.round((readCount / totalSops) * 100) : 0;
+  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 p-8 text-white shadow-2xl">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-extrabold">SOP Library</h1>
-
-              <p className="mt-2 text-indigo-100">
-                Welcome, {profile?.full_name || "Team Member"}
-              </p>
-
-              <p className="mt-2 text-sm font-semibold text-indigo-200">
-                SOP Completion: {readCount}/{totalSops} ({completion}%)
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
-                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-              >
-                Dashboard
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+    <PortalShell isAdminOrPartner={isAdminOrPartner} profileName={profile?.full_name} pageTitle="SOP Library">
+      <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--forest)", marginBottom: 4 }}>SOP Library</h1>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Office manuals and department-wise procedures.</p>
         </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-900 p-5 text-white shadow-lg">
-            <p className="text-sm font-bold text-slate-300">Total SOPs</p>
-            <p className="mt-2 text-4xl font-extrabold">{totalSops}</p>
-          </div>
-
-          <div className="rounded-2xl bg-green-700 p-5 text-white shadow-lg">
-            <p className="text-sm font-bold text-green-100">Read</p>
-            <p className="mt-2 text-4xl font-extrabold">{readCount}</p>
-          </div>
-
-          <div className="rounded-2xl bg-indigo-700 p-5 text-white shadow-lg">
-            <p className="text-sm font-bold text-indigo-100">Completion</p>
-            <p className="mt-2 text-4xl font-extrabold">{completion}%</p>
-          </div>
-        </div>
-
-        {categories.map((cat) => {
-          const categorySops = sops.filter((s) => s.category_id === cat.id);
-          const categoryRead = categorySops.filter((s) => isRead(s.id)).length;
-          const categoryPercent =
-            categorySops.length > 0
-              ? Math.round((categoryRead / categorySops.length) * 100)
-              : 0;
-
-          return (
-            <div
-              key={cat.id}
-              className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-200"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-3xl font-bold text-slate-950">
-                    {cat.name}
-                  </h2>
-
-                  <p className="mt-1 text-sm font-semibold text-slate-600">
-                    {categoryRead}/{categorySops.length} SOPs read
-                  </p>
-                </div>
-
-                <div className="w-40">
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={`h-full rounded-full ${
-                        categoryPercent === 100
-                          ? "bg-green-600"
-                          : categoryPercent > 0
-                          ? "bg-indigo-600"
-                          : "bg-yellow-500"
-                      }`}
-                      style={{ width: `${categoryPercent}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-right text-xs font-bold text-slate-700">
-                    {categoryPercent}%
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {categorySops.map((sop) => (
-                  <div
-                    key={sop.id}
-                    className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-slate-950">
-                          {sop.display_order}. {sop.title}
-                        </h3>
-
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                          {sop.description}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold ${
-                          isRead(sop.id)
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {isRead(sop.id) ? "Read" : "Pending"}
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setMessage("");
-                        setSelectedSop(sop);
-                      }}
-                      className="mt-6 w-full rounded-2xl bg-indigo-700 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-800"
-                    >
-                      Open SOP
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search SOPs..." className="fi" style={{ width: 240 }} />
       </div>
-    </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        <div className="sc"><div className="sv">{sops.length}</div><div className="sl">Total SOPs</div></div>
+        <div className="sc"><div className="sv">{totalRead}</div><div className="sl">Read</div></div>
+        <div className="sc"><div className="sv">{sops.length > 0 ? Math.round((totalRead / sops.length) * 100) : 0}%</div><div className="sl">Completion</div></div>
+      </div>
+
+      {/* Categories */}
+      {categories.map(cat => {
+        const catSops = filteredSops.filter(s => s.category_id === cat.id);
+        if (catSops.length === 0) return null;
+        const catRead = catSops.filter(s => isRead(s.id)).length;
+        return (
+          <div key={cat.id} className="card" style={{ marginBottom: "1rem", overflow: "hidden" }}>
+            <div style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fafaf8" }}>
+              <div>
+                <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.95rem" }}>{cat.name}</span>
+                <span style={{ color: "var(--muted)", fontSize: "0.78rem", marginLeft: "0.5rem" }}>{catRead}/{catSops.length} read</span>
+              </div>
+              <div style={{ width: 80, height: 5, background: "#e8ede8", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", background: "var(--forest)", width: `${catSops.length ? (catRead / catSops.length) * 100 : 0}%` }} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 0 }}>
+              {catSops.map((sop, i) => (
+                <div key={sop.id} style={{ padding: "0.9rem 1.25rem", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text)" }}>{sop.display_order}. {sop.title}</span>
+                      {isRead(sop.id) && <span className="badge bg" style={{ fontSize: "0.65rem" }}>Read</span>}
+                      {!isRead(sop.id) && <span className="badge by" style={{ fontSize: "0.65rem" }}>Pending</span>}
+                    </div>
+                    {sop.description && <p style={{ fontSize: "0.78rem", color: "var(--muted)", lineHeight: 1.4 }}>{sop.description}</p>}
+                  </div>
+                  <button className="btn btn-p btn-sm" onClick={() => openSop(sop)} style={{ flexShrink: 0 }}>Open</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Modal */}
+      {selectedSop && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}
+          onClick={e => { if (e.target === e.currentTarget) setSelectedSop(null); }}>
+          <div style={{ background: "#fff", borderRadius: 14, maxWidth: 680, width: "100%", maxHeight: "88vh", overflow: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}>
+            <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff" }}>
+              <div>
+                <h2 style={{ fontWeight: 800, color: "var(--forest)", fontSize: "1.1rem" }}>{selectedSop.title}</h2>
+                {selectedSop.description && <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 2 }}>{selectedSop.description}</p>}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                {canMarkRead && <button className="btn btn-g btn-sm" onClick={markRead}>Mark as Read</button>}
+                <button className="btn btn-o btn-sm" onClick={() => setSelectedSop(null)}>Close</button>
+              </div>
+            </div>
+            <div style={{ padding: "1.25rem 1.5rem" }}>
+              {message && <div style={{ background: "#e8f4ec", borderRadius: 8, padding: "0.6rem 0.9rem", color: "var(--forest)", fontWeight: 600, fontSize: "0.85rem", marginBottom: "1rem" }}>{message}</div>}
+              {selectedSop.content ? (
+                <div style={{ fontSize: "0.88rem", lineHeight: 1.7, color: "var(--text)", whiteSpace: "pre-wrap" }}>{selectedSop.content}</div>
+              ) : (
+                <p style={{ color: "var(--muted)", fontSize: "0.88rem" }}>No content available for this SOP.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </PortalShell>
   );
 }

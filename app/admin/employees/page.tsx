@@ -1,372 +1,131 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import PortalShell from "../../../components/PortalShell";
 
-type Employee = {
-  user_id: string;
-  full_name: string | null;
-  role: string | null;
-  designation: string | null;
-  official_email: string | null;
-  personal_email: string | null;
-  mobile_number: string | null;
-  employment_status: string | null;
-  active_for_assignment: boolean | null;
-  joining_date: string | null;
-  date_of_exit: string | null;
-  exit_reason: string | null;
-};
+type Employee = { user_id: string; full_name: string | null; role: string | null; designation: string | null; official_email: string | null; personal_email: string | null; mobile_number: string | null; employment_status: string | null; active_for_assignment: boolean | null; joining_date: string | null; date_of_exit: string | null; exit_reason: string | null; };
 
-export default function EmployeeManagementPage() {
+export default function EmployeesPage() {
   const router = useRouter();
-
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-  const [search, setSearch] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [loading, setLoading] = useState(true); const [message, setMessage] = useState(""); const [search, setSearch] = useState("");
+  const [deptFilter, setDeptFilter] = useState("All");
 
-  const loadData = async () => {
-    const { data: authData } = await supabase.auth.getUser();
-
-    if (!authData.user) {
-      router.push("/login");
-      return;
-    }
-
-    const { data: myProfile } = await supabase
-      .from("employee_profiles")
-      .select("*")
-      .eq("user_id", authData.user.id)
-      .single();
-
-    const role = (myProfile?.role || "").toLowerCase();
-
-    if (!role.includes("admin") && !role.includes("partner")) {
-      router.push("/dashboard");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("employee_profiles")
-      .select(
-        "user_id, full_name, role, designation, official_email, personal_email, mobile_number, employment_status, active_for_assignment, joining_date, date_of_exit, exit_reason"
-      )
-      .order("full_name", { ascending: true });
-
-    if (error) {
-      setMessage("Unable to load employees: " + error.message);
-    }
-
-    setEmployees(data || []);
-    setLoading(false);
+  const load = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) { router.push("/login"); return; }
+    const { data: mp } = await supabase.from("employee_profiles").select("*").eq("user_id", u.user.id).single();
+    const role = (mp?.role || "").toLowerCase();
+    if (!role.includes("admin") && !role.includes("partner")) { router.push("/dashboard"); return; }
+    setProfileName(mp?.full_name || "");
+    const { data } = await supabase.from("employee_profiles").select("user_id,full_name,role,designation,official_email,personal_email,mobile_number,employment_status,active_for_assignment,joining_date,date_of_exit,exit_reason").order("full_name", { ascending: true });
+    setEmployees(data || []); setLoading(false);
   };
+  useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const markPastEmployee = async (emp: Employee) => {
-    const reason = window.prompt(
-      `Reason for marking ${emp.full_name || "this employee"} as past employee?`
-    );
-
+  const markPast = async (emp: Employee) => {
+    const reason = window.prompt(`Exit reason for ${emp.full_name || "this employee"}?`);
     if (reason === null) return;
-
-    const { error } = await supabase
-      .from("employee_profiles")
-      .update({
-        employment_status: "Past Employee",
-        active_for_assignment: false,
-        date_of_exit: new Date().toISOString().slice(0, 10),
-        exit_reason: reason || null,
-      })
-      .eq("user_id", emp.user_id);
-
-    if (error) {
-      setMessage("Could not mark past employee: " + error.message);
-      return;
-    }
-
-    setMessage("Employee moved to past employee database.");
-    await loadData();
+    const { error } = await supabase.from("employee_profiles").update({ employment_status: "Past Employee", active_for_assignment: false, date_of_exit: new Date().toISOString().slice(0, 10), exit_reason: reason || null }).eq("user_id", emp.user_id);
+    if (error) { setMessage(error.message); return; }
+    setMessage("Employee moved to past database."); await load();
+  };
+  const reactivate = async (emp: Employee) => {
+    const { error } = await supabase.from("employee_profiles").update({ employment_status: "Active", active_for_assignment: true, date_of_exit: null, exit_reason: null }).eq("user_id", emp.user_id);
+    if (error) { setMessage(error.message); return; }
+    setMessage("Employee reactivated."); await load();
   };
 
-  const reactivateEmployee = async (emp: Employee) => {
-    const { error } = await supabase
-      .from("employee_profiles")
-      .update({
-        employment_status: "Active",
-        active_for_assignment: true,
-        date_of_exit: null,
-        exit_reason: null,
-      })
-      .eq("user_id", emp.user_id);
+  const filtered = employees.filter(e => !search || `${e.full_name} ${e.role} ${e.designation} ${e.official_email} ${e.personal_email} ${e.mobile_number}`.toLowerCase().includes(search.toLowerCase()));
+  const active = filtered.filter(e => e.active_for_assignment !== false);
+  const past = filtered.filter(e => e.active_for_assignment === false);
+  const articles = employees.filter(e => (e.role || "").toLowerCase().includes("article"));
+  const departments = ["All", ...Array.from(new Set(employees.map(e => e.designation).filter(Boolean)))];
 
-    if (error) {
-      setMessage("Could not reactivate employee: " + error.message);
-      return;
-    }
+  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
 
-    setMessage("Employee reactivated.");
-    await loadData();
-  };
-
-  const filteredEmployees = employees.filter((emp) => {
-    const text = [
-      emp.full_name,
-      emp.role,
-      emp.designation,
-      emp.official_email,
-      emp.personal_email,
-      emp.mobile_number,
-      emp.employment_status,
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return text.includes(search.toLowerCase());
-  });
-
-  const activeEmployees = filteredEmployees.filter(
-    (e) => e.active_for_assignment !== false
+  const TH = ({ children }: { children: React.ReactNode }) => (
+    <th style={{ padding: "0.6rem 1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)", background: "#f7f9f5", whiteSpace: "nowrap" }}>{children}</th>
+  );
+  const TD = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+    <td style={{ padding: "0.65rem 1rem", fontSize: "0.845rem", color: "var(--text)", ...style }}>{children}</td>
   );
 
-  const pastEmployees = filteredEmployees.filter(
-    (e) => e.active_for_assignment === false
-  );
-
-  if (loading) {
-    return (
-      <div className="p-10 text-xl font-bold text-slate-900">
-        Loading Employee Management...
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-3xl bg-gradient-to-r from-slate-950 to-purple-950 p-8 text-white shadow-2xl">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-extrabold">
-                Employee Management
-              </h1>
-              <p className="mt-2 text-purple-100">
-                Active employees, past employees, roles and employee database.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => router.push("/admin")}
-                className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900"
-              >
-                Admin Dashboard
-              </button>
-
-              <button
-                onClick={() => router.push("/admin/laptops")}
-                className="rounded-2xl bg-cyan-700 px-6 py-3 text-sm font-bold text-white"
-              >
-                Laptop Management
-              </button>
-
-              <button
-                onClick={() => router.push("/dashboard")}
-                className="rounded-2xl bg-blue-700 px-6 py-3 text-sm font-bold text-white"
-              >
-                Main Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {message && (
-          <div className="rounded-2xl bg-blue-50 p-4 font-bold text-blue-900 ring-1 ring-blue-200">
-            {message}
-          </div>
-        )}
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <Summary title="Total Employees" value={employees.length} color="bg-slate-900" />
-          <Summary title="Active" value={employees.filter((e) => e.active_for_assignment !== false).length} color="bg-green-700" />
-          <Summary title="Past Employees" value={employees.filter((e) => e.active_for_assignment === false).length} color="bg-purple-700" />
-          <Summary title="Articles" value={employees.filter((e) => (e.role || "").toLowerCase().includes("article")).length} color="bg-blue-700" />
-        </div>
-
-        <div className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-300">
-          <label className="mb-2 block text-sm font-bold text-slate-800">
-            Search Employees
-          </label>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, mobile, role, designation..."
-            className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-          />
-        </div>
-
-        <Section title="Active Employees">
-          <EmployeeTable
-            employees={activeEmployees}
-            pastMode={false}
-            onMarkPast={markPastEmployee}
-            onReactivate={reactivateEmployee}
-          />
-        </Section>
-
-        <Section title="Past Employees Database">
-          <EmployeeTable
-            employees={pastEmployees}
-            pastMode={true}
-            onMarkPast={markPastEmployee}
-            onReactivate={reactivateEmployee}
-          />
-        </Section>
-      </div>
-    </div>
-  );
-}
-
-function EmployeeTable({
-  employees,
-  pastMode,
-  onMarkPast,
-  onReactivate,
-}: {
-  employees: Employee[];
-  pastMode: boolean;
-  onMarkPast: (emp: Employee) => void;
-  onReactivate: (emp: Employee) => void;
-}) {
-  if (employees.length === 0) {
-    return <p className="text-slate-700">No employees found.</p>;
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border border-slate-300 text-sm">
-        <thead>
-          <tr className="bg-slate-900 text-left text-white">
-            <th className="px-4 py-3">Name</th>
-            <th className="px-4 py-3">Role</th>
-            <th className="px-4 py-3">Designation</th>
-            <th className="px-4 py-3">Email</th>
-            <th className="px-4 py-3">Mobile</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Joining</th>
-            <th className="px-4 py-3">Exit</th>
-            <th className="px-4 py-3">Exit Reason</th>
-            <th className="px-4 py-3">Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {employees.map((emp) => (
-            <tr
-              key={emp.user_id}
-              className="border-b border-slate-200 bg-white text-slate-900"
-            >
-              <td className="px-4 py-3 font-bold">
-                {emp.full_name || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.role || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.designation || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.official_email || emp.personal_email || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.mobile_number || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${
-                    pastMode
-                      ? "bg-purple-100 text-purple-900 ring-purple-300"
-                      : "bg-green-100 text-green-900 ring-green-300"
-                  }`}
-                >
-                  {emp.employment_status || "Active"}
-                </span>
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.joining_date || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.date_of_exit || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {emp.exit_reason || "-"}
-              </td>
-
-              <td className="px-4 py-3">
-                {pastMode ? (
-                  <button
-                    onClick={() => onReactivate(emp)}
-                    className="rounded-xl bg-green-700 px-4 py-2 text-xs font-bold text-white hover:bg-green-800"
-                  >
-                    Reactivate
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => onMarkPast(emp)}
-                    className="rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white hover:bg-red-800"
-                  >
-                    Mark Past
-                  </button>
-                )}
-              </td>
+  const EmpTable = ({ emps, isPast }: { emps: Employee[]; isPast: boolean }) => (
+    <div style={{ overflowX: "auto" }}>
+      {emps.length === 0 ? <p style={{ padding: "1rem", color: "var(--muted)", fontSize: "0.875rem" }}>No employees found.</p> : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.845rem" }}>
+          <thead>
+            <tr>
+              {["#", "Name", "Role", "Designation", "Email", "Mobile", "Status", "Joining", ...(isPast ? ["Exit", "Reason"] : []), "Action"].map(h => <TH key={h}>{h}</TH>)}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {emps.map((e, i) => (
+              <tr key={e.user_id} style={{ borderBottom: "1px solid var(--border)", background: i % 2 === 0 ? "#fff" : "#fafaf8" }}>
+                <TD style={{ color: "var(--muted)", fontSize: "0.75rem" }}>{i + 1}</TD>
+                <TD><span style={{ fontWeight: 700 }}>{e.full_name || "—"}</span></TD>
+                <TD>{e.role || "—"}</TD>
+                <TD style={{ color: "var(--muted)" }}>{e.designation || "—"}</TD>
+                <TD style={{ color: "var(--forest-mid)", fontSize: "0.8rem" }}>{e.official_email || e.personal_email || "—"}</TD>
+                <TD style={{ color: "var(--muted)" }}>{e.mobile_number || "—"}</TD>
+                <TD><span className={`badge ${isPast ? "br" : "bg"}`}>{e.employment_status || "Active"}</span></TD>
+                <TD style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{e.joining_date || "—"}</TD>
+                {isPast && <><TD style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{e.date_of_exit || "—"}</TD><TD style={{ color: "var(--muted)", fontSize: "0.78rem", maxWidth: 160 }}>{e.exit_reason || "—"}</TD></>}
+                <TD>
+                  {isPast
+                    ? <button className="btn btn-p btn-sm" onClick={() => reactivate(e)}>Reactivate</button>
+                    : <button style={{ background: "#fee2e2", color: "#991b1b", border: "none", borderRadius: 6, padding: "0.3rem 0.7rem", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }} onClick={() => markPast(e)}>Mark Past</button>}
+                </TD>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
-}
 
-function Summary({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value: string | number;
-  color: string;
-}) {
   return (
-    <div className={`${color} rounded-2xl p-5 text-white shadow-xl`}>
-      <p className="text-sm font-bold text-white/80">{title}</p>
-      <p className="mt-2 text-3xl font-extrabold">{value}</p>
-    </div>
-  );
-}
+    <PortalShell isAdminOrPartner profileName={profileName} pageTitle="Employees">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--forest)", marginBottom: 4 }}>Employees</h1>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Employee directory, roles and management.</p>
+        </div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email, role..." className="fi" style={{ width: 260 }} />
+      </div>
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-      <h2 className="mb-6 text-2xl font-bold text-slate-950">{title}</h2>
-      {children}
-    </div>
+      {message && <div style={{ background: "#e8f4ec", borderRadius: 9, padding: "0.7rem 1rem", color: "var(--forest)", fontWeight: 600, fontSize: "0.85rem", marginBottom: "1rem" }}>{message}</div>}
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        <div className="sc"><div className="sv">{employees.length}</div><div className="sl">Total Employees</div></div>
+        <div className="sc"><div className="sv">{employees.filter(e => e.active_for_assignment !== false).length}</div><div className="sl">Active</div></div>
+        <div className="sc"><div className="sv">{employees.filter(e => e.active_for_assignment === false).length}</div><div className="sl">Past Employees</div></div>
+        <div className="sc"><div className="sv">{articles.length}</div><div className="sl">Articles</div></div>
+      </div>
+
+      {/* Active */}
+      <div className="card" style={{ overflow: "hidden", marginBottom: "1.25rem" }}>
+        <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Active Employees</span>
+          <span className="badge bg">{active.length}</span>
+        </div>
+        <EmpTable emps={active} isPast={false} />
+      </div>
+
+      {/* Past */}
+      {past.length > 0 && (
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Past Employees</span>
+            <span className="badge br">{past.length}</span>
+          </div>
+          <EmpTable emps={past} isPast={true} />
+        </div>
+      )}
+    </PortalShell>
   );
 }

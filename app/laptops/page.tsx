@@ -1,296 +1,162 @@
 "use client";
-
-import PortalShell from "../../components/PortalShell";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import PortalShell from "../../components/PortalShell";
 
-type Laptop = {
-  id: string;
-  asset_tag: string;
-  serial_number: string | null;
-  brand: string | null;
-  model: string | null;
-  processor: string | null;
-  ram: string | null;
-  storage: string | null;
-  operating_system: string | null;
-  warranty_expiry: string | null;
-  condition_notes: string | null;
-  status: string | null;
-};
+type Laptop = { id: string; asset_tag: string; serial_number: string | null; brand: string | null; model: string | null; processor: string | null; ram: string | null; storage: string | null; operating_system: string | null; warranty_expiry: string | null; condition_notes: string | null; status: string | null; };
+type Complaint = { id: string; laptop_id: string | null; subject: string; description: string; priority: string; status: string; admin_notes: string | null; created_at: string; };
 
-type Complaint = {
-  id: string;
-  laptop_id: string | null;
-  subject: string;
-  description: string;
-  priority: string;
-  status: string;
-  admin_notes: string | null;
-  created_at: string;
-};
-
-export default function LaptopUserPage() {
+export default function LaptopsPage() {
   const router = useRouter();
-
-  const [userId, setUserId] = useState("");
-  const [laptops, setLaptops] = useState<Laptop[]>([]);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const [laptopId, setLaptopId] = useState("");
-  const [subject, setSubject] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("Medium");
-
-  const loadData = async (uid: string) => {
-    const { data: laptopData } = await supabase
-      .from("laptops")
-      .select("*")
-      .eq("current_user_id", uid)
-      .order("asset_tag", { ascending: true });
-
-    const { data: complaintData } = await supabase
-      .from("laptop_complaints")
-      .select("*")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false });
-
-    setLaptops(laptopData || []);
-    setComplaints(complaintData || []);
-
-    if (!laptopId && laptopData && laptopData.length > 0) {
-      setLaptopId(laptopData[0].id);
-    }
-  };
+  const [userId, setUserId] = useState(""); const [profile, setProfile] = useState<any>(null);
+  const [laptops, setLaptops] = useState<Laptop[]>([]); const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [message, setMessage] = useState("");
+  const [laptopId, setLaptopId] = useState(""); const [subject, setSubject] = useState(""); const [desc, setDesc] = useState(""); const [priority, setPriority] = useState("Medium");
 
   useEffect(() => {
-    const init = async () => {
-      const { data } = await supabase.auth.getUser();
-
-      if (!data.user) {
-        router.replace("/login");
-        return;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) { router.push("/login"); return; }
+      const uid = u.user.id; setUserId(uid);
+      const [pr, lr, cr] = await Promise.all([
+        supabase.from("employee_profiles").select("*").eq("user_id", uid).single(),
+        supabase.from("laptop_assignments").select("laptop_id").eq("user_id", uid),
+        supabase.from("laptop_complaints").select("*").eq("raised_by", uid).order("created_at", { ascending: false }),
+      ]);
+      setProfile(pr.data);
+      if (lr.data && lr.data.length > 0) {
+        const ids = lr.data.map((x: any) => x.laptop_id);
+        const { data: laps } = await supabase.from("laptops").select("*").in("id", ids);
+        setLaptops(laps || []);
+        if (laps && laps.length > 0) setLaptopId(laps[0].id);
       }
-
-      setUserId(data.user.id);
-      await loadData(data.user.id);
+      setComplaints(cr.data || []);
       setLoading(false);
-    };
-
-    init();
+    })();
   }, [router]);
 
-  const handleSubmitComplaint = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    setMessage("");
-
-    if (!subject.trim() || !description.trim()) {
-      setMessage("Please enter subject and description.");
-      setSaving(false);
-      return;
+  const submitComplaint = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true); setMessage("");
+    const { error } = await supabase.from("laptop_complaints").insert({ raised_by: userId, laptop_id: laptopId || null, subject, description: desc, priority, status: "Open" });
+    if (error) { setMessage(error.message); } else {
+      setMessage("Complaint raised successfully."); setSubject(""); setDesc(""); setPriority("Medium");
+      const { data: cr } = await supabase.from("laptop_complaints").select("*").eq("raised_by", userId).order("created_at", { ascending: false });
+      setComplaints(cr || []);
     }
-
-    const { error } = await supabase.from("laptop_complaints").insert({
-      user_id: userId,
-      laptop_id: laptopId || null,
-      subject,
-      description,
-      priority,
-      status: "Pending",
-    });
-
-    if (error) {
-      setMessage("Complaint could not be submitted: " + error.message);
-    } else {
-      setMessage("Complaint submitted successfully.");
-      setSubject("");
-      setDescription("");
-      setPriority("Medium");
-      await loadData(userId);
-    }
-
     setSaving(false);
   };
 
-  const getStatusStyle = (status?: string | null) => {
-    if (status === "Resolved") return "bg-green-100 text-green-900 ring-green-300";
-    if (status === "In Progress") return "bg-blue-100 text-blue-900 ring-blue-300";
-    if (status === "Rejected") return "bg-red-100 text-red-900 ring-red-300";
-    return "bg-yellow-100 text-yellow-900 ring-yellow-300";
-  };
+  const role = (profile?.role || "").toLowerCase();
+  const isAdminOrPartner = role.includes("admin") || role.includes("partner");
 
-  if (loading) {
-    return <p className="p-10 text-lg font-bold text-slate-900">Loading laptop dashboard...</p>;
-  }
+  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+
+  const statusBadge = (s: string) => s === "Resolved" ? "bg" : s === "In Progress" ? "bb" : "by";
+  const priorityBadge = (p: string) => p === "High" ? "br" : p === "Low" ? "bg" : "by";
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "1.75rem" }}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-950">Laptop Support</h1>
-              <p className="mt-2 text-slate-700">View your assigned laptop and raise support complaints.</p>
-            </div>
-            <button
-              onClick={() => { const o=document.getElementById("page-transition-overlay"); if(o){o.classList.add("active");setTimeout(()=>{router.push("/dashboard");setTimeout(()=>o.classList.remove("active"),80)},120);}else router.push("/dashboard"); }}
-              className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800"
-            >
-              Back to Dashboard
-            </button>
+    <PortalShell isAdminOrPartner={isAdminOrPartner} profileName={profile?.full_name} pageTitle="IT Assets">
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--forest)", marginBottom: 4 }}>Laptop Support</h1>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>View your assigned laptop and raise support complaints.</p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+        {/* My Laptop */}
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>My Laptop</span>
           </div>
-        </div>
-
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-          <h2 className="text-2xl font-bold text-slate-950">My Laptop</h2>
-
           {laptops.length === 0 ? (
-            <p className="mt-4 rounded-xl bg-yellow-50 p-4 font-semibold text-yellow-900 ring-1 ring-yellow-300">
-              No laptop is currently assigned to you.
-            </p>
-          ) : (
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {laptops.map((laptop) => (
-                <div key={laptop.id} className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-300">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-950">{laptop.asset_tag}</h3>
-                      <p className="text-sm font-medium text-slate-600">
-                        {laptop.brand || "-"} {laptop.model || ""}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-900 ring-1 ring-green-300">
-                      {laptop.status || "Active"}
-                    </span>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 text-sm text-slate-800">
-                    <Info label="Serial No." value={laptop.serial_number} />
-                    <Info label="Processor" value={laptop.processor} />
-                    <Info label="RAM" value={laptop.ram} />
-                    <Info label="Storage" value={laptop.storage} />
-                    <Info label="OS" value={laptop.operating_system} />
-                    <Info label="Warranty Expiry" value={laptop.warranty_expiry} />
-                    <Info label="Notes" value={laptop.condition_notes} />
-                  </div>
+            <div style={{ padding: "1.5rem 1.25rem", color: "var(--muted)", fontSize: "0.875rem" }}>No laptop assigned.</div>
+          ) : laptops.map(lap => (
+            <div key={lap.id} style={{ padding: "1rem 1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <div>
+                  <div style={{ fontWeight: 800, color: "var(--text)", fontSize: "1rem" }}>{lap.asset_tag}</div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>{[lap.brand, lap.model].filter(Boolean).join(" · ")}</div>
+                </div>
+                <span className={`badge ${lap.status === "Active" ? "bg" : "br"}`}>{lap.status || "Unknown"}</span>
+              </div>
+              {[
+                ["Serial No.", lap.serial_number],
+                ["Processor",  lap.processor],
+                ["RAM",        lap.ram],
+                ["Storage",    lap.storage],
+                ["OS",         lap.operating_system],
+                ["Warranty",   lap.warranty_expiry],
+                ["Notes",      lap.condition_notes],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k as string} style={{ display: "flex", justifyContent: "space-between", padding: "0.45rem 0", borderBottom: "1px solid var(--border)", fontSize: "0.83rem" }}>
+                  <span style={{ color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.72rem" }}>{k}</span>
+                  <span style={{ color: "var(--text)", fontWeight: 600, textAlign: "right", maxWidth: "60%" }}>{v}</span>
                 </div>
               ))}
             </div>
-          )}
+          ))}
         </div>
 
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-          <h2 className="text-2xl font-bold text-slate-950">Raise Laptop Complaint</h2>
-
-          <form onSubmit={handleSubmitComplaint} className="mt-6 grid gap-5 md:grid-cols-2">
+        {/* Raise Complaint */}
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>Raise a Complaint</span>
+          </div>
+          <form onSubmit={submitComplaint} style={{ padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-800">Laptop</label>
-              <select
-                value={laptopId}
-                onChange={(e) => setLaptopId(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-              >
-                {laptops.length === 0 && <option value="">No laptop assigned</option>}
-                {laptops.map((laptop) => (
-                  <option key={laptop.id} value={laptop.id}>
-                    {laptop.asset_tag} - {laptop.brand || ""} {laptop.model || ""}
-                  </option>
-                ))}
+              <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--forest)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Laptop</label>
+              <select className="fi" value={laptopId} onChange={e => setLaptopId(e.target.value)}>
+                {laptops.map(l => <option key={l.id} value={l.id}>{l.asset_tag} — {l.model || l.brand}</option>)}
               </select>
             </div>
-
             <div>
-              <label className="mb-2 block text-sm font-bold text-slate-800">Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-              >
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-                <option>Critical</option>
+              <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--forest)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Priority</label>
+              <select className="fi" value={priority} onChange={e => setPriority(e.target.value)}>
+                {["Low", "Medium", "High"].map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-bold text-slate-800">Subject</label>
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-                placeholder="Example: Battery backup issue"
-              />
+            <div>
+              <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--forest)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Subject</label>
+              <input className="fi" value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Battery backup issue" required />
             </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-bold text-slate-800">Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="min-h-32 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-950 outline-none focus:border-blue-600 focus:bg-white"
-                placeholder="Explain the issue clearly."
-              />
+            <div>
+              <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--forest)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Description</label>
+              <textarea className="fi" value={desc} onChange={e => setDesc(e.target.value)} rows={4} placeholder="Describe the issue in detail..." required style={{ resize: "vertical" }} />
             </div>
-
-            <div className="md:col-span-2 flex items-center gap-4">
-              <button
-                disabled={saving}
-                className="rounded-2xl bg-blue-700 px-6 py-3 font-bold text-white hover:bg-blue-800 disabled:opacity-60"
-              >
-                {saving ? "Submitting..." : "Submit Complaint"}
-              </button>
-              {message && <p className="text-sm font-bold text-slate-800">{message}</p>}
-            </div>
+            <button type="submit" disabled={saving} className="btn btn-p" style={{ padding: "0.65rem" }}>{saving ? "Submitting..." : "Submit Complaint"}</button>
+            {message && <div style={{ background: "#e8f4ec", borderRadius: 8, padding: "0.6rem 0.9rem", color: "var(--forest)", fontWeight: 600, fontSize: "0.83rem" }}>{message}</div>}
           </form>
         </div>
-
-        <div className="rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-300">
-          <h2 className="text-2xl font-bold text-slate-950">My Complaints</h2>
-
-          {complaints.length === 0 ? (
-            <p className="mt-4 text-slate-700">No complaints raised yet.</p>
-          ) : (
-            <div className="mt-6 grid gap-4">
-              {complaints.map((item) => (
-                <div key={item.id} className="rounded-2xl bg-slate-50 p-5 ring-1 ring-slate-300">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-950">{item.subject}</h3>
-                      <p className="mt-1 text-sm text-slate-700">{item.description}</p>
-                      <p className="mt-2 text-xs font-semibold text-slate-500">
-                        Priority: {item.priority} | Raised: {new Date(item.created_at).toLocaleString()}
-                      </p>
-                      {item.admin_notes && (
-                        <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-900 ring-1 ring-blue-200">
-                          Admin Note: {item.admin_notes}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${getStatusStyle(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
-    </div>
-  );
-}
 
-function Info({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-      <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 font-semibold text-slate-950">{value || "-"}</p>
-    </div>
+      {/* Complaint history */}
+      {complaints.length > 0 && (
+        <div className="card" style={{ marginTop: "1.25rem", overflow: "hidden" }}>
+          <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <span style={{ fontWeight: 700, color: "var(--forest)", fontSize: "0.9rem" }}>My Complaints</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.845rem" }}>
+            <thead>
+              <tr style={{ background: "#f7f9f5" }}>
+                {["Subject", "Priority", "Status", "Date", "Admin Notes"].map(h => (
+                  <th key={h} style={{ padding: "0.65rem 1.1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {complaints.map((c, i) => (
+                <tr key={c.id} style={{ borderBottom: i < complaints.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <td style={{ padding: "0.7rem 1.1rem", fontWeight: 600 }}>{c.subject}</td>
+                  <td style={{ padding: "0.7rem 1.1rem" }}><span className={`badge ${priorityBadge(c.priority)}`}>{c.priority}</span></td>
+                  <td style={{ padding: "0.7rem 1.1rem" }}><span className={`badge ${statusBadge(c.status)}`}>{c.status}</span></td>
+                  <td style={{ padding: "0.7rem 1.1rem", color: "var(--muted)", fontSize: "0.8rem" }}>{new Date(c.created_at).toLocaleDateString("en-IN")}</td>
+                  <td style={{ padding: "0.7rem 1.1rem", color: "var(--muted)", fontSize: "0.8rem" }}>{c.admin_notes || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </PortalShell>
   );
 }

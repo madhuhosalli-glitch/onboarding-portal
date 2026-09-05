@@ -3,21 +3,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "BVC Office Portal",
-  description: "Training, SOPs, IT Assets and Office Operations",
+  description: "Training, SOPs, IT Assets and Office Operations — B V C & Co.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full">
-        {/* Page transition overlay — eliminates black flash between navigations */}
-        <div id="page-transition-overlay" />
-        {children}
-      </body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }

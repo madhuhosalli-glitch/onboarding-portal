@@ -44,7 +44,7 @@ export default function EmployeesPage() {
   const articles = employees.filter(e => (e.role || "").toLowerCase().includes("article"));
   const departments = ["All", ...Array.from(new Set(employees.map(e => e.designation).filter(Boolean)))];
 
-  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+  if (loading) return <div style={{ marginLeft: 220, padding: "2rem" }}><div className="skeleton" style={{ height: 90, borderRadius: 12, marginBottom: "1rem" }} /><div className="skeleton" style={{ height: 300, borderRadius: 12 }} /></div>;
 
   const TH = ({ children }: { children: React.ReactNode }) => (
     <th style={{ padding: "0.6rem 1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)", background: "#f7f9f5", whiteSpace: "nowrap" }}>{children}</th>

@@ -86,8 +86,16 @@ export default function DashboardPage() {
   const centreCard: React.CSSProperties = { maxWidth: 520, margin: "6rem auto", background: "#fff", borderRadius: 14, border: "1px solid var(--border)", padding: "2rem" };
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--forest)" }}>
-      <div style={{ color: "var(--gold)", fontWeight: 700 }}>Loading...</div>
+    <div style={{ marginLeft: 220, minHeight: "100vh", background: "var(--bg)", padding: "1.5rem 1.75rem" }}>
+      <div style={{ height: 56, background: "#fff", borderBottom: "1px solid var(--border)", margin: "-1.5rem -1.75rem 1.5rem", padding: "0 1.75rem", display: "flex", alignItems: "center" }}>
+        <div className="skeleton" style={{ height: 18, width: 80 }} />
+      </div>
+      <div className="skeleton" style={{ height: 90, borderRadius: 12, marginBottom: "1.25rem" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 80, borderRadius: 12 }} />)}
+      </div>
+      <div className="skeleton" style={{ height: 70, borderRadius: 12, marginBottom: "1.25rem" }} />
+      <div className="skeleton" style={{ height: 260, borderRadius: 12 }} />
     </div>
   );
 
@@ -192,7 +200,7 @@ export default function DashboardPage() {
                     <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text)" }}>{mod.title}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span className={`badge ${status === "Passed" ? "bg" : status === "Failed" ? "br" : "by"}`}>{status || "Not Started"}</span>
+                    <span className={`badge ${status === "Passed" ? "bg" : status === "Failed" ? "br" : status === "Viewed by Admin/Partner" ? "bb" : "by"}`}>{status === "Viewed by Admin/Partner" ? "Viewed" : status || "Not Started"}</span>
                     <button className="btn btn-o btn-sm" onClick={() => router.push(`/training/${mod.id}`)}>Open →</button>
                   </div>
                 </div>

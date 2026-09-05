@@ -50,7 +50,7 @@ export default function LaptopsPage() {
   const role = (profile?.role || "").toLowerCase();
   const isAdminOrPartner = role.includes("admin") || role.includes("partner");
 
-  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+  if (loading) return <div style={{ marginLeft: 220, padding: "2rem" }}><div className="skeleton" style={{ height: 90, borderRadius: 12, marginBottom: "1rem" }} /><div className="skeleton" style={{ height: 300, borderRadius: 12 }} /></div>;
 
   const statusBadge = (s: string) => s === "Resolved" ? "bg" : s === "In Progress" ? "bb" : "by";
   const priorityBadge = (p: string) => p === "High" ? "br" : p === "Low" ? "bg" : "by";

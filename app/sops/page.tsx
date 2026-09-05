@@ -52,7 +52,28 @@ export default function SOPLibraryPage() {
     !search || `${s.title} ${s.description || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+  if (loading) return (
+    <PortalShell isAdminOrPartner={false} profileName="" pageTitle="SOP Library">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 78, borderRadius: 12 }} />)}
+      </div>
+      {[1,2,3].map(i => (
+        <div key={i} className="card" style={{ marginBottom: "1rem" }}>
+          <div style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid var(--border)", background: "#fafaf8" }}>
+            <div className="skeleton" style={{ height: 18, width: 160, borderRadius: 4 }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+            {[1,2,3].map(j => (
+              <div key={j} style={{ padding: "0.9rem 1.25rem", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+                <div className="skeleton" style={{ height: 16, width: "80%", borderRadius: 4, marginBottom: 8 }} />
+                <div className="skeleton" style={{ height: 12, width: "60%", borderRadius: 4 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </PortalShell>
+  );
 
   return (
     <PortalShell isAdminOrPartner={isAdminOrPartner} profileName={profile?.full_name} pageTitle="SOP Library">
@@ -89,7 +110,10 @@ export default function SOPLibraryPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 0 }}>
               {catSops.map((sop, i) => (
-                <div key={sop.id} style={{ padding: "0.9rem 1.25rem", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
+                <div key={sop.id} style={{ padding: "0.9rem 1.25rem", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", transition: "background 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f0f5f0"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+                >
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text)" }}>{sop.display_order}. {sop.title}</span>

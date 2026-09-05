@@ -13,7 +13,6 @@
   --text: #1a1a1a;
   --muted: #6b7565;
   --border: #dde5d8;
-  --sidebar-w: 220px;
 }
 
 body {
@@ -23,9 +22,6 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
-
-/* Smooth page transitions — no flash, no loading state */
-@view-transition { navigation: auto; }
 
 /* Form inputs */
 .fi {
@@ -60,15 +56,52 @@ body {
 .sc .sv { font-size: 1.75rem; font-weight: 800; color: var(--gold); line-height: 1; margin-bottom: 4px; }
 .sc .sl { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,255,255,0.55); }
 
+/* Hover cards — lively effect */
+.hover-card {
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+.hover-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 8px 28px rgba(26,58,42,0.13);
+  border-color: #b8cdb5;
+}
+
+/* Training module hover card */
+.module-card {
+  background: var(--surface);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, border-color 0.15s ease;
+}
+.module-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 36px rgba(26,58,42,0.14);
+  border-color: var(--forest-light);
+}
+
 /* Card */
 .card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); }
 
 /* Buttons */
 .btn { border: none; border-radius: 8px; padding: 0.55rem 1.1rem; font-size: 0.845rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.13s; }
 .btn-p { background: var(--forest); color: #fff; }
-.btn-p:hover { background: var(--forest-mid); }
+.btn-p:hover { background: var(--forest-mid); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26,58,42,0.25); }
 .btn-g { background: var(--gold); color: var(--forest); }
-.btn-g:hover { background: var(--gold-light); }
+.btn-g:hover { background: var(--gold-light); transform: translateY(-1px); }
 .btn-o { background: transparent; color: var(--forest); border: 1.5px solid var(--border); }
-.btn-o:hover { border-color: var(--forest); background: #f0f5f0; }
+.btn-o:hover { border-color: var(--forest); background: #f0f5f0; transform: translateY(-1px); }
 .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.78rem; }
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, #e8ede8 25%, #f0f4f0 50%, #e8ede8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }

@@ -77,7 +77,22 @@ export default function SopCompliancePage() {
     setMessage("Assignment saved."); setAssignChecklist(null); await load();
   };
 
-  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+  if (loading) return (
+    <PortalShell isAdminOrPartner profileName="" pageTitle="SOP Compliance">
+      <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <div className="skeleton" style={{ height: 28, width: 200, borderRadius: 6, marginBottom: 8 }} />
+          <div className="skeleton" style={{ height: 16, width: 300, borderRadius: 4 }} />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+        {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 78, borderRadius: 12 }} />)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1rem" }}>
+        {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" style={{ height: 200, borderRadius: 12 }} />)}
+      </div>
+    </PortalShell>
+  );
 
   return (
     <PortalShell isAdminOrPartner profileName={profileName} pageTitle="SOP Compliance">
@@ -118,7 +133,7 @@ export default function SopCompliancePage() {
                 const last = getLastSub(cl.id);
                 const submitted = !!last;
                 return (
-                  <div key={cl.id} className="card" style={{ overflow: "hidden", borderLeft: `3px solid ${freqColor(cl.frequency)}` }}>
+                  <div key={cl.id} className="hover-card" style={{ overflow: "hidden", borderLeft: `3px solid ${freqColor(cl.frequency)}` }}>
                     <div style={{ padding: "0.85rem 1rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                         <div>

@@ -48,7 +48,7 @@ export default function AdminPage() {
   const inProg = reportUsers.filter(p => getSummary(p.user_id).status === "In Progress").length;
   const notStarted = reportUsers.filter(p => getSummary(p.user_id).status === "Not Started").length;
 
-  if (loading) return <div style={{ padding: "2rem", color: "var(--forest)", fontWeight: 700 }}>Loading...</div>;
+  if (loading) return <div style={{ marginLeft: 220, padding: "2rem" }}><div className="skeleton" style={{ height: 56, borderRadius: 0, marginBottom: "1.5rem" }} /><div className="skeleton" style={{ height: 90, borderRadius: 12, marginBottom: "1rem" }} /></div>;
 
   const TH = ({ c }: { c: React.ReactNode }) => (
     <th style={{ padding: "0.6rem 1rem", textAlign: "left", fontWeight: 700, color: "var(--forest)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--border)", background: "#f7f9f5", whiteSpace: "nowrap" }}>{c}</th>

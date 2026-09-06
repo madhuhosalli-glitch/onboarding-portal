@@ -147,10 +147,30 @@ export default function SOPLibraryPage() {
             </div>
             <div style={{ padding: "1.25rem 1.5rem" }}>
               {message && <div style={{ background: "#e8f4ec", borderRadius: 8, padding: "0.6rem 0.9rem", color: "var(--forest)", fontWeight: 600, fontSize: "0.85rem", marginBottom: "1rem" }}>{message}</div>}
-              {selectedSop.content ? (
-                <div style={{ fontSize: "0.88rem", lineHeight: 1.7, color: "var(--text)", whiteSpace: "pre-wrap" }}>{selectedSop.content}</div>
+              {selectedSop.sop_content ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {selectedSop.sop_content.split("\n").map((line: string) => line.trim()).filter(Boolean).map((line: string, i: number) => {
+                    const isHeading = /^#+\s/.test(line) || (line === line.toUpperCase() && line.length > 3 && !line.match(/^\d+\./));
+                    const isNumbered = /^\d+[.)]\s/.test(line);
+                    const isBullet = /^[-•*]\s/.test(line);
+                    return (
+                      <div key={i} style={{
+                        fontSize: isHeading ? "0.88rem" : "0.85rem",
+                        fontWeight: isHeading ? 800 : isNumbered || isBullet ? 600 : 400,
+                        color: isHeading ? "var(--forest)" : "var(--text)",
+                        lineHeight: 1.6,
+                        paddingLeft: isNumbered || isBullet ? "0.5rem" : 0,
+                        borderTop: isHeading && i > 0 ? "1px solid var(--border)" : "none",
+                        paddingTop: isHeading && i > 0 ? "0.75rem" : 0,
+                        marginTop: isHeading && i > 0 ? "0.25rem" : 0,
+                        textTransform: isHeading ? "uppercase" : "none",
+                        letterSpacing: isHeading ? "0.04em" : "normal",
+                      }}>{line}</div>
+                    );
+                  })}
+                </div>
               ) : (
-                <p style={{ color: "var(--muted)", fontSize: "0.88rem" }}>No content available for this SOP.</p>
+                <p style={{ color: "var(--muted)", fontSize: "0.88rem" }}>No content has been added for this SOP yet.</p>
               )}
             </div>
           </div>
